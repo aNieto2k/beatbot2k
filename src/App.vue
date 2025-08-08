@@ -10,13 +10,6 @@
           <button @click="showAddTrackModal = true" class="add-track-btn">+ Pista</button>
           <button @click="showExportModal = true" class="export-btn">📤 Exportar</button>
           <button @click="showImportModal = true" class="import-btn">📥 Importar</button>
-          <button 
-            @click="isRecording ? stopRecording() : startRecording()" 
-            :class="['recording-btn', { 'recording': isRecording }]"
-            :title="isRecording ? 'Detener grabación' : 'Iniciar grabación'"
-          >
-            {{ isRecording ? '⏹️ Detener' : '🎙️ Grabar' }}
-          </button>
           <div class="theme-toggle" @click="toggleTheme" :title="isLightMode ? 'Cambiar a modo oscuro' : 'Cambiar a modo claro'">
             <span class="theme-icon">{{ isLightMode ? '🌙' : '☀️' }}</span>
           </div>
@@ -81,6 +74,36 @@
           <span class="badge">16 pasos</span>
           <span class="badge">{{ tracks.length }} pistas</span>
           <span class="badge">Sin muestras · síntesis</span>
+        </div>
+      </section>
+
+      <!-- Sección de Sesiones -->
+      <section class="sessions-section">
+        <div class="sessions-header">
+          <h3>🎙️ Sesiones</h3>
+          <div class="sessions-controls">
+            <button 
+              @click="isRecording ? stopRecording() : startRecording()" 
+              :class="['recording-btn', { 'recording': isRecording }]"
+              :title="isRecording ? 'Detener grabación' : 'Iniciar grabación'"
+            >
+              {{ isRecording ? '⏹️ Detener' : '🎙️ Grabar' }}
+            </button>
+            <button @click="showSessionsModal = true" class="sessions-btn">
+              📁 Sesiones Guardadas ({{ savedSessions.length }})
+            </button>
+          </div>
+        </div>
+        
+        <div v-if="isRecording" class="recording-status">
+          <div class="recording-indicator">
+            <span class="recording-dot"></span>
+            <span>Grabando... {{ getCurrentSessionTime() }}</span>
+          </div>
+        </div>
+        
+        <div v-if="showSaveSuccess" class="save-success">
+          ✅ Sesión guardada correctamente
         </div>
       </section>
 
@@ -206,6 +229,67 @@
         <button @click="showRecordingModal = false" class="modal-close">Cerrar</button>
       </div>
     </div>
+
+    <!-- Modal de nombre para la sesión grabada -->
+    <div v-if="showRecordingNameModal" class="modal-overlay" @click="showRecordingNameModal = false">
+      <div class="modal" @click.stop>
+        <h3>🎙️ Nombre para la Sesión Grabada</h3>
+        <div class="recording-summary">
+          <div class="summary-item">
+            <span class="summary-label">Duración:</span>
+            <span class="summary-value">{{ formatTime(recordingSessionData?.duration || 0) }}</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Eventos:</span>
+            <span class="summary-value">{{ recordingSessionData?.events?.length || 0 }}</span>
+          </div>
+        </div>
+        <div class="name-input-container">
+          <label for="session-name">Nombre de la sesión:</label>
+          <input 
+            id="session-name"
+            type="text" 
+            v-model="recordingSessionName" 
+            placeholder="Ej: Mi ritmo favorito, Sesión de prueba, etc."
+            @keyup.enter="saveRecordingWithName"
+            autofocus
+          />
+        </div>
+        <div class="modal-actions">
+          <button @click="saveRecordingWithName" class="primary" :disabled="!recordingSessionName.trim()">
+            💾 Guardar Sesión
+          </button>
+          <button @click="cancelRecording" class="modal-close">
+            ❌ Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal de sesiones guardadas -->
+    <div v-if="showSessionsModal" class="modal-overlay" @click="showSessionsModal = false">
+      <div class="modal" @click.stop>
+        <h3>Sesiones Guardadas</h3>
+        <div class="saved-sessions-list">
+          <div v-if="savedSessions.length === 0" class="no-sessions-message">
+            No hay sesiones guardadas.
+          </div>
+          <div v-for="session in savedSessions" :key="session.id" class="saved-session-item">
+            <div class="session-header">
+              <span class="session-name">{{ session.name }}</span>
+              <span class="session-date">{{ formatSessionDate(session.timestamp) }}</span>
+              <span class="session-duration">{{ formatSessionDuration(session.duration) }}</span>
+            </div>
+            <div class="session-actions">
+              <button @click="playSavedSession(session.id)" class="play-btn">▶️ Reproducir</button>
+              <button @click="exportSavedSession(session.id)" class="export-btn">📤 Exportar</button>
+              <button @click="deleteSession(session.id)" class="delete-btn">🗑️ Eliminar</button>
+            </div>
+          </div>
+        </div>
+        <button @click="showSessionsModal = false" class="modal-close">Cerrar</button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -245,12 +329,15 @@ export default {
       showExportModal: false,
       showImportModal: false,
       showRecordingModal: false,
+      showRecordingNameModal: false,
+      showSessionsModal: false,
       
       // Export/Import
       importSeed: '',
       importError: '',
       showCopySuccess: false,
       showImportSuccess: false,
+      showSaveSuccess: false,
       
       // Theme
       isLightMode: true,
@@ -262,6 +349,10 @@ export default {
       recordingEvents: [],
       recordingSessionId: null,
       recordingSessionData: null,
+      recordingSessionName: '',
+      
+      // Sessions management
+      savedSessions: [],
       
       // Available track types
       availableTrackTypes: [
@@ -347,6 +438,9 @@ export default {
     window.addEventListener('resize', () => {
       this.handleResize();
     });
+
+    // Cargar sesiones guardadas al montar
+    this.loadSavedSessions();
   },
   methods: {
     // Original methods that were overridden
@@ -599,6 +693,7 @@ export default {
       this.recordingStartTime = Date.now();
       this.recordingEvents = [];
       this.recordingSessionId = this.generateSessionId();
+      this.recordingSessionName = '';
       
       // Record initial state
       this.recordEvent('session_start', {
@@ -620,11 +715,10 @@ export default {
       this.recordEvent('session_end', {});
       
       const sessionData = this.generateSessionData();
-      console.log('🎙️ Recording stopped:', sessionData);
-      
-      // Show recording modal with session data
-      this.showRecordingModal = true;
       this.recordingSessionData = sessionData;
+      
+      // Show naming modal
+      this.showRecordingNameModal = true;
     },
     
     recordEvent(type, data) {
@@ -1218,6 +1312,128 @@ export default {
         default:
           return '';
       }
+    },
+
+    // Sessions management methods
+    loadSavedSessions() {
+      const saved = localStorage.getItem('beatbot-sessions');
+      if (saved) {
+        try {
+          this.savedSessions = JSON.parse(saved);
+        } catch (error) {
+          console.error('Error loading saved sessions:', error);
+          this.savedSessions = [];
+        }
+      }
+    },
+    
+    saveSessionsToStorage() {
+      localStorage.setItem('beatbot-sessions', JSON.stringify(this.savedSessions));
+    },
+    
+    saveSession(sessionData, name) {
+      const session = {
+        id: this.generateSessionId(),
+        name: name || `Sesión ${new Date().toLocaleString()}`,
+        timestamp: Date.now(),
+        duration: sessionData.duration,
+        eventsCount: sessionData.events.length,
+        data: sessionData
+      };
+      
+      this.savedSessions.unshift(session); // Añadir al principio
+      this.saveSessionsToStorage();
+      
+      console.log('💾 Session saved:', session);
+      return session;
+    },
+    
+    deleteSession(sessionId) {
+      const index = this.savedSessions.findIndex(s => s.id === sessionId);
+      if (index !== -1) {
+        this.savedSessions.splice(index, 1);
+        this.saveSessionsToStorage();
+        console.log('🗑️ Session deleted:', sessionId);
+      }
+    },
+    
+    playSavedSession(sessionId) {
+      const session = this.savedSessions.find(s => s.id === sessionId);
+      if (session) {
+        this.playSession(session.data);
+        console.log('▶️ Playing saved session:', session.name);
+      }
+    },
+    
+    exportSavedSession(sessionId) {
+      const session = this.savedSessions.find(s => s.id === sessionId);
+      if (session) {
+        const sessionSeed = btoa(JSON.stringify(session.data));
+        
+        try {
+          if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(sessionSeed).then(() => {
+              this.showCopySuccess = true;
+              setTimeout(() => {
+                this.showCopySuccess = false;
+              }, 2000);
+            });
+          } else {
+            // Fallback para navegadores antiguos
+            const textArea = document.createElement('textarea');
+            textArea.value = sessionSeed;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            
+            this.showCopySuccess = true;
+            setTimeout(() => {
+              this.showCopySuccess = false;
+            }, 2000);
+          }
+        } catch (err) {
+          console.error('Error al copiar sesión:', err);
+        }
+        
+        return sessionSeed;
+      }
+      return null;
+    },
+    
+    formatSessionDuration(duration) {
+      return this.formatTime(duration);
+    },
+    
+    formatSessionDate(timestamp) {
+      return new Date(timestamp).toLocaleString('es-ES', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    },
+    
+    saveRecordingWithName() {
+      if (!this.recordingSessionData || !this.recordingSessionName.trim()) return;
+      
+      const session = this.saveSession(this.recordingSessionData, this.recordingSessionName.trim());
+      this.showRecordingNameModal = false;
+      this.recordingSessionName = '';
+      this.recordingSessionData = null;
+      
+      // Show success message
+      this.showSaveSuccess = true;
+      setTimeout(() => {
+        this.showSaveSuccess = false;
+      }, 3000);
+    },
+    
+    cancelRecording() {
+      this.showRecordingNameModal = false;
+      this.recordingSessionName = '';
+      this.recordingSessionData = null;
     }
   }
 }
