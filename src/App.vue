@@ -10,10 +10,17 @@
           <button @click="showAddTrackModal = true" class="add-track-btn">+ Pista</button>
           <button @click="showExportModal = true" class="export-btn">📤 Exportar</button>
           <button @click="showImportModal = true" class="import-btn">📥 Importar</button>
+          <button 
+            @click="isRecording ? stopRecording() : startRecording()" 
+            :class="['recording-btn', { 'recording': isRecording }]"
+            :title="isRecording ? 'Detener grabación' : 'Iniciar grabación'"
+          >
+            {{ isRecording ? '⏹️ Detener' : '🎙️ Grabar' }}
+          </button>
           <div class="theme-toggle" @click="toggleTheme" :title="isLightMode ? 'Cambiar a modo oscuro' : 'Cambiar a modo claro'">
             <span class="theme-icon">{{ isLightMode ? '🌙' : '☀️' }}</span>
           </div>
-          <div class="toggle" @click="metronomeOn = !metronomeOn">
+          <div class="toggle" @click="toggleMetronome()">
             <span class="led" :class="{on: metronomeOn}"></span>
             <span> Metrónomo </span>
           </div>
@@ -155,6 +162,50 @@
         <button @click="showImportModal = false" class="modal-close">Cancelar</button>
       </div>
     </div>
+
+    <!-- Modal de grabación -->
+    <div v-if="showRecordingModal" class="modal-overlay" @click="showRecordingModal = false">
+      <div class="modal" @click.stop>
+        <h3>🎙️ Sesión Grabada</h3>
+        <div class="recording-info">
+          <div class="recording-stats">
+            <div class="stat">
+              <span class="stat-label">Duración:</span>
+              <span class="stat-value">{{ formatTime(recordingSessionData?.duration || 0) }}</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Eventos:</span>
+              <span class="stat-value">{{ recordingSessionData?.events?.length || 0 }}</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">ID de Sesión:</span>
+              <span class="stat-value">{{ recordingSessionData?.sessionId || 'N/A' }}</span>
+            </div>
+          </div>
+          
+          <div class="recording-events">
+            <h4>Eventos de la sesión:</h4>
+            <div class="events-list">
+              <div v-for="event in recordingSessionData?.events" :key="event.timestamp" class="event-item">
+                <span class="event-time">{{ event.sessionTime }}</span>
+                <span class="event-type">{{ getEventTypeName(event.type) }}</span>
+                <span class="event-details">{{ getEventDetails(event) }}</span>
+              </div>
+            </div>
+          </div>
+          
+          <div class="recording-actions">
+            <button @click="copySessionSeed()" class="copy-btn">
+              📋 Copiar Sesión
+            </button>
+            <button @click="playSession(recordingSessionData)" class="play-btn">
+              ▶️ Reproducir Sesión
+            </button>
+          </div>
+        </div>
+        <button @click="showRecordingModal = false" class="modal-close">Cerrar</button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -165,43 +216,64 @@ export default {
   name: 'App',
   data() {
     return {
+      // Audio
       audio: null,
       master: null,
+      masterGain: 0.85,
       isPlaying: false,
+      currentStep: 0,
+      timerID: null,
+      metronomeOn: false,
+      scheduleAheadTime: 0.2,
+      lookahead: 50,
+      nextNoteTime: 0,
+      
+      // Tracks
+      tracks: [
+        { name: 'Kick', type: 'kick', steps: Array(16).fill(false) },
+        { name: 'Snare', type: 'snare', steps: Array(16).fill(false) },
+        { name: 'Hat', type: 'hat', steps: Array(16).fill(false) }
+      ],
+      
+      // Controls
       bpm: 100,
       swing: 0.1,
-      masterGain: 0.85,
-      metronomeOn: false,
-      scheduleAheadTime: 0.2, // más holgura
-      lookahead: 50, // ms
-      currentStep: 0,
-      nextNoteTime: 0,
-      timerID: null,
       density: 0.35,
-      tracks: [
-        { name: 'Kick',  type: 'kick', steps: Array(16).fill(false) },
-        { name: 'Snare', type: 'snare', steps: Array(16).fill(false) },
-        { name: 'Hat',   type: 'hat', steps: Array(16).fill(false) }
-      ],
+      
+      // Modals
       showAddTrackModal: false,
       showExportModal: false,
       showImportModal: false,
+      showRecordingModal: false,
+      
+      // Export/Import
       importSeed: '',
       importError: '',
-      availableTrackTypes: [
-        { id: 'kick', name: 'Kick', description: 'Bajo sintético', icon: '🥁' },
-        { id: 'snare', name: 'Snare', description: 'Caja sintética', icon: '🥁' },
-        { id: 'hat', name: 'Hi-Hat', description: 'Hi-hat sintético', icon: '🥁' },
-        { id: 'tom', name: 'Tom', description: 'Tom sintético', icon: '🥁' },
-        { id: 'clap', name: 'Clap', description: 'Aplauso sintético', icon: '👏' },
-        { id: 'cymbal', name: 'Cymbal', description: 'Plato sintético', icon: '🥁' },
-        { id: 'bass', name: 'Bass', description: 'Bajo sintético', icon: '🎸' },
-        { id: 'lead', name: 'Lead', description: 'Lead sintético', icon: '🎹' }
-      ],
       showCopySuccess: false,
       showImportSuccess: false,
-      isLightMode: true, // Nuevo estado para el tema
-      currentTrackIndex: 0 // Nuevo estado para el swipe
+      
+      // Theme
+      isLightMode: true,
+      currentTrackIndex: 0,
+      
+      // Recording system
+      isRecording: false,
+      recordingStartTime: 0,
+      recordingEvents: [],
+      recordingSessionId: null,
+      recordingSessionData: null,
+      
+      // Available track types
+      availableTrackTypes: [
+        { id: 'kick', name: 'Kick', description: 'Bajo profundo y potente', icon: '🥁' },
+        { id: 'snare', name: 'Snare', description: 'Caja seca y crujiente', icon: '🥁' },
+        { id: 'hat', name: 'Hi-Hat', description: 'Platillo agudo y brillante', icon: '🥁' },
+        { id: 'tom', name: 'Tom', description: 'Tom medio y resonante', icon: '🥁' },
+        { id: 'clap', name: 'Clap', description: 'Aplauso electrónico', icon: '👏' },
+        { id: 'cymbal', name: 'Cymbal', description: 'Platillo crash', icon: '🥁' },
+        { id: 'bass', name: 'Bass', description: 'Bajo sintético', icon: '🎸' },
+        { id: 'lead', name: 'Lead', description: 'Lead sintético', icon: '🎹' }
+      ]
     }
   },
   computed: {
@@ -222,6 +294,20 @@ export default {
       // Convertir a string y codificar en base64
       const jsonString = JSON.stringify(patternData);
       return btoa(jsonString);
+    }
+  },
+  watch: {
+    bpm() {
+      this.updateBpm();
+    },
+    swing() {
+      this.updateSwing();
+    },
+    masterGain() {
+      this.updateMasterGain();
+    },
+    density() {
+      this.updateDensity();
     }
   },
   mounted() {
@@ -263,54 +349,40 @@ export default {
     });
   },
   methods: {
-    ensureAudio() {
-      if (this.audio) return;
-      const AC = window.AudioContext || window.webkitAudioContext;
-      this.audio = new AC();
-      this.master = this.audio.createGain();
-      this.master.gain.value = this.masterGain;
-      this.master.connect(this.audio.destination);
-      if (this.audio.state === 'suspended') {
-        this.audio.resume();
-      }
-    },
-    updateMasterGain() {
-      if (this.master) this.master.gain.value = this.masterGain;
-    },
-    toggle() {
-      if(!this.isPlaying) {
+    // Original methods that were overridden
+    start() {
+      if (!this.isPlaying) {
         this.ensureAudio();
         this.isPlaying = true;
         this.currentStep = 0;
         this.nextNoteTime = this.audio.currentTime + 0.05;
         this.scheduler();
-        // IMPORTANT: preservar el this
         this.timerID = setInterval(() => this.scheduler(), this.lookahead);
-      } else {
-        this.isPlaying = false;
-        if (this.timerID) clearInterval(this.timerID);
       }
     },
-    clearAll() {
-      this.tracks.forEach(t => t.steps = t.steps.map(() => false));
+    
+    stop() {
+      this.isPlaying = false;
+      if (this.timerID) {
+        clearInterval(this.timerID);
+        this.timerID = null;
+      }
     },
-    randomize() {
-      this.tracks.forEach((t, idx) => {
-        t.steps = t.steps.map((_, i) => {
-          if(idx === 1 && (i === 4 || i === 12)) return Math.random() < Math.max(this.density, 0.15);
-          const weight = (i % 4 === 0) ? 0.6 : (i % 2 === 0 ? 0.35 : 0.2);
-          return Math.random() < (this.density * weight);
-        })
-      })
+    
+    ensureAudio() {
+      if (!this.audio) {
+        this.audio = new (window.AudioContext || window.webkitAudioContext)();
+        this.master = this.audio.createGain();
+        this.master.connect(this.audio.destination);
+        this.master.gain.value = this.masterGain;
+      }
     },
-    toggleStep(t, s) {
-      // Corregido: usar asignación directa para reactividad
-      this.tracks[t].steps[s] = !this.tracks[t].steps[s];
-    },
+    
     secondsPerStep() {
-      const spb = 60 / this.bpm; // segundos por negra
-      return spb / 4; // 4 pasos por negra (16 por compás)
+      const spb = 60 / this.bpm;
+      return spb / 4;
     },
+    
     scheduler() {
       if (!this.isPlaying || !this.audio) return;
       while (this.nextNoteTime < this.audio.currentTime + this.scheduleAheadTime) {
@@ -322,27 +394,29 @@ export default {
         this.advanceStep();
       }
     },
+    
     advanceStep() {
       const stepLen = this.secondsPerStep();
       this.nextNoteTime += stepLen;
       this.currentStep = (this.currentStep + 1) % 16;
     },
+    
     scheduleStep(step, time) {
-      // Actualizar currentStep de manera síncrona para la UI
       this.currentStep = step;
-
-      if(this.metronomeOn && step % 4 === 0) {
+      
+      if (this.metronomeOn && step % 4 === 0) {
         this.playClick(time, step === 0 ? 1200 : 900);
       }
-
+      
       this.tracks.forEach((t, idx) => {
-        if(t.steps[step]) {
+        if (t.steps[step]) {
           this.playTrack(t, time);
         }
       });
     },
+    
     playTrack(track, time) {
-      switch(track.type) {
+      switch (track.type) {
         case 'kick':
           this.playKick(time);
           break;
@@ -368,10 +442,11 @@ export default {
           this.playLead(time);
           break;
         default:
-          this.playKick(time); // fallback
+          this.playKick(time);
       }
     },
-    // —— Sintetizadores ——
+    
+    // Synthesizers
     playKick(time) {
       const o = this.audio.createOscillator();
       const g = this.audio.createGain();
@@ -384,6 +459,7 @@ export default {
       o.start(time);
       o.stop(time + 0.16);
     },
+    
     playSnare(time) {
       const bufferSize = this.audio.sampleRate * 0.2;
       const buffer = this.audio.createBuffer(1, bufferSize, this.audio.sampleRate);
@@ -406,6 +482,7 @@ export default {
       noise.start(time);
       noise.stop(time + 0.2);
     },
+    
     playHat(time) {
       const bufferSize = this.audio.sampleRate * 0.05;
       const buffer = this.audio.createBuffer(1, bufferSize, this.audio.sampleRate);
@@ -425,6 +502,7 @@ export default {
       noise.start(time);
       noise.stop(time + 0.06);
     },
+    
     playTom(time) {
       const o = this.audio.createOscillator();
       const g = this.audio.createGain();
@@ -437,6 +515,7 @@ export default {
       o.start(time);
       o.stop(time + 0.2);
     },
+    
     playClap(time) {
       const bufferSize = this.audio.sampleRate * 0.1;
       const buffer = this.audio.createBuffer(1, bufferSize, this.audio.sampleRate);
@@ -456,6 +535,7 @@ export default {
       noise.start(time);
       noise.stop(time + 0.1);
     },
+    
     playCymbal(time) {
       const bufferSize = this.audio.sampleRate * 0.3;
       const buffer = this.audio.createBuffer(1, bufferSize, this.audio.sampleRate);
@@ -475,6 +555,7 @@ export default {
       noise.start(time);
       noise.stop(time + 0.3);
     },
+    
     playBass(time) {
       const o = this.audio.createOscillator();
       const g = this.audio.createGain();
@@ -487,6 +568,7 @@ export default {
       o.start(time);
       o.stop(time + 0.25);
     },
+    
     playLead(time) {
       const o = this.audio.createOscillator();
       const g = this.audio.createGain();
@@ -498,6 +580,7 @@ export default {
       o.start(time);
       o.stop(time + 0.1);
     },
+    
     playClick(time, freq = 1000) {
       const o = this.audio.createOscillator();
       const g = this.audio.createGain();
@@ -509,28 +592,101 @@ export default {
       o.start(time);
       o.stop(time + 0.04);
     },
-    addTrack(trackType) {
-      const trackName = `${trackType.name} ${this.tracks.length + 1}`;
-      this.tracks.push({ 
-        name: trackName, 
-        type: trackType.id, 
-        steps: Array(16).fill(false) 
+    
+    // Recording methods
+    startRecording() {
+      this.isRecording = true;
+      this.recordingStartTime = Date.now();
+      this.recordingEvents = [];
+      this.recordingSessionId = this.generateSessionId();
+      
+      // Record initial state
+      this.recordEvent('session_start', {
+        bpm: this.bpm,
+        swing: this.swing,
+        masterGain: this.masterGain,
+        density: this.density,
+        tracks: JSON.parse(JSON.stringify(this.tracks)),
+        metronomeOn: this.metronomeOn
       });
-      this.showAddTrackModal = false;
+      
+      console.log('🎙️ Recording started:', this.recordingSessionId);
     },
-    removeTrack(index) {
-      if (this.tracks.length > 1) {
-        this.tracks.splice(index, 1);
-      }
+    
+    stopRecording() {
+      if (!this.isRecording) return;
+      
+      this.isRecording = false;
+      this.recordEvent('session_end', {});
+      
+      const sessionData = this.generateSessionData();
+      console.log('🎙️ Recording stopped:', sessionData);
+      
+      // Show recording modal with session data
+      this.showRecordingModal = true;
+      this.recordingSessionData = sessionData;
     },
+    
+    recordEvent(type, data) {
+      if (!this.isRecording) return;
+      
+      const timestamp = Date.now() - this.recordingStartTime;
+      const event = {
+        type,
+        timestamp,
+        data,
+        sessionTime: this.formatTime(timestamp)
+      };
+      
+      this.recordingEvents.push(event);
+      console.log('📝 Recorded event:', event);
+    },
+    
+    generateSessionId() {
+      return 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    },
+    
+    generateSessionData() {
+      const sessionData = {
+        version: '2.0',
+        sessionId: this.recordingSessionId,
+        startTime: this.recordingStartTime,
+        duration: Date.now() - this.recordingStartTime,
+        events: this.recordingEvents,
+        finalState: {
+          bpm: this.bpm,
+          swing: this.swing,
+          masterGain: this.masterGain,
+          density: this.density,
+          tracks: JSON.parse(JSON.stringify(this.tracks)),
+          metronomeOn: this.metronomeOn
+        }
+      };
+      
+      return sessionData;
+    },
+    
+    formatTime(milliseconds) {
+      const seconds = Math.floor(milliseconds / 1000);
+      const minutes = Math.floor(seconds / 60);
+      const remainingSeconds = seconds % 60;
+      return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+    },
+    
+    getCurrentSessionTime() {
+      if (!this.isRecording) return '0:00';
+      const currentTime = Date.now() - this.recordingStartTime;
+      return this.formatTime(currentTime);
+    },
+    
+    // Export/Import methods
     copySeed() {
       const seedInput = this.$refs.seedInput;
       if (seedInput) {
         seedInput.select();
-        seedInput.setSelectionRange(0, 99999); // Para móviles
+        seedInput.setSelectionRange(0, 99999);
         
         try {
-          // Usar la API moderna del navegador
           if (navigator.clipboard && window.isSecureContext) {
             navigator.clipboard.writeText(this.currentSeed).then(() => {
               this.showCopySuccess = true;
@@ -539,7 +695,6 @@ export default {
               }, 2000);
             });
           } else {
-            // Fallback para navegadores antiguos
             document.execCommand('copy');
             this.showCopySuccess = true;
             setTimeout(() => {
@@ -551,29 +706,27 @@ export default {
         }
       }
     },
+    
     importPattern() {
       if (!this.importSeed.trim()) {
         this.importError = 'Por favor, introduce un código de semilla válido.';
         return;
       }
-
+      
       try {
-        // Validar que sea un string base64 válido
         const jsonString = atob(this.importSeed.trim());
         const patternData = JSON.parse(jsonString);
-
-        // Validar estructura del patrón
+        
         if (!patternData.version || patternData.version !== '1.0') {
           this.importError = 'Formato de semilla inválido. Versión no soportada.';
           return;
         }
-
+        
         if (!patternData.tracks || !Array.isArray(patternData.tracks)) {
           this.importError = 'Formato de semilla inválido. Datos de pistas faltantes.';
           return;
         }
-
-        // Validar y aplicar los datos
+        
         if (patternData.bpm && patternData.bpm >= 60 && patternData.bpm <= 200) {
           this.bpm = patternData.bpm;
         }
@@ -585,19 +738,17 @@ export default {
         if (patternData.density !== undefined && patternData.density >= 0 && patternData.density <= 1) {
           this.density = patternData.density;
         }
-
-        // Aplicar las pistas
+        
         this.tracks = patternData.tracks.map(track => ({
           name: track.name || 'Pista',
           type: track.type || 'kick',
           steps: Array.isArray(track.steps) ? track.steps : Array(16).fill(false)
         }));
-
+        
         this.showImportModal = false;
         this.importError = '';
         this.importSeed = '';
         
-        // Mostrar mensaje de éxito
         this.showImportSuccess = true;
         setTimeout(() => {
           this.showImportSuccess = false;
@@ -606,6 +757,240 @@ export default {
       } catch (error) {
         console.error('Error al importar:', error);
         this.importError = 'Error al importar el patrón. Verifica que el código sea válido.';
+      }
+    },
+    
+    // Override existing methods to record events
+    toggle() {
+      if (this.isPlaying) {
+        this.stop();
+        if (this.isRecording) {
+          this.recordEvent('playback_stop', {});
+        }
+      } else {
+        this.start();
+        if (this.isRecording) {
+          this.recordEvent('playback_start', {});
+        }
+      }
+    },
+    
+    toggleStep(trackIndex, stepIndex) {
+      this.tracks[trackIndex].steps[stepIndex] = !this.tracks[trackIndex].steps[stepIndex];
+      
+      if (this.isRecording) {
+        this.recordEvent('step_toggle', {
+          trackIndex,
+          stepIndex,
+          newState: this.tracks[trackIndex].steps[stepIndex]
+        });
+      }
+    },
+    
+    updateBpm() {
+      if (this.isRecording) {
+        this.recordEvent('bpm_change', {
+          oldBpm: this.bpm,
+          newBpm: this.bpm
+        });
+      }
+    },
+    
+    updateSwing() {
+      if (this.isRecording) {
+        this.recordEvent('swing_change', {
+          oldSwing: this.swing,
+          newSwing: this.swing
+        });
+      }
+    },
+    
+    updateMasterGain() {
+      if (this.master) {
+        this.master.gain.setValueAtTime(this.masterGain, this.audio.currentTime);
+      }
+      
+      if (this.isRecording) {
+        this.recordEvent('volume_change', {
+          oldVolume: this.masterGain,
+          newVolume: this.masterGain
+        });
+      }
+    },
+    
+    updateDensity() {
+      if (this.isRecording) {
+        this.recordEvent('density_change', {
+          oldDensity: this.density,
+          newDensity: this.density
+        });
+      }
+    },
+    
+    toggleMetronome() {
+      this.metronomeOn = !this.metronomeOn;
+      
+      if (this.isRecording) {
+        this.recordEvent('metronome_toggle', {
+          newState: this.metronomeOn
+        });
+      }
+    },
+    
+    addTrack(trackType) {
+      const newTrack = {
+        name: `${trackType.name} ${this.tracks.length + 1}`,
+        type: trackType.id,
+        steps: Array(16).fill(false)
+      };
+      
+      this.tracks.push(newTrack);
+      this.showAddTrackModal = false;
+      
+      if (this.isRecording) {
+        this.recordEvent('track_added', {
+          trackType: trackType.id,
+          trackName: newTrack.name,
+          trackIndex: this.tracks.length - 1
+        });
+      }
+    },
+    
+    removeTrack(index) {
+      if (this.tracks.length > 1) {
+        const removedTrack = this.tracks[index];
+        this.tracks.splice(index, 1);
+        
+        if (this.isRecording) {
+          this.recordEvent('track_removed', {
+            trackIndex: index,
+            trackName: removedTrack.name,
+            trackType: removedTrack.type
+          });
+        }
+      }
+    },
+    
+    clearAll() {
+      const oldTracks = JSON.parse(JSON.stringify(this.tracks));
+      this.tracks.forEach(track => {
+        track.steps.fill(false);
+      });
+      
+      if (this.isRecording) {
+        this.recordEvent('clear_all', {
+          oldTracks
+        });
+      }
+    },
+    
+    randomize() {
+      const oldTracks = JSON.parse(JSON.stringify(this.tracks));
+      
+      this.tracks.forEach(track => {
+        track.steps = track.steps.map(() => Math.random() < this.density);
+      });
+      
+      if (this.isRecording) {
+        this.recordEvent('randomize', {
+          oldTracks,
+          newTracks: JSON.parse(JSON.stringify(this.tracks)),
+          density: this.density
+        });
+      }
+    },
+    
+    // Session playback methods
+    playSession(sessionData) {
+      if (!sessionData || !sessionData.events) return;
+      
+      // Reset to initial state
+      const initialEvent = sessionData.events.find(e => e.type === 'session_start');
+      if (initialEvent) {
+        this.bpm = initialEvent.data.bpm;
+        this.swing = initialEvent.data.swing;
+        this.masterGain = initialEvent.data.masterGain;
+        this.density = initialEvent.data.density;
+        this.tracks = JSON.parse(JSON.stringify(initialEvent.data.tracks));
+        this.metronomeOn = initialEvent.data.metronomeOn;
+      }
+      
+      // Play events in sequence
+      sessionData.events.forEach(event => {
+        setTimeout(() => {
+          this.replayEvent(event);
+        }, event.timestamp);
+      });
+    },
+    
+    replayEvent(event) {
+      switch (event.type) {
+        case 'step_toggle':
+          this.tracks[event.data.trackIndex].steps[event.data.stepIndex] = event.data.newState;
+          break;
+        case 'bpm_change':
+          this.bpm = event.data.newBpm;
+          break;
+        case 'swing_change':
+          this.swing = event.data.newSwing;
+          break;
+        case 'volume_change':
+          this.masterGain = event.data.newVolume;
+          this.updateMasterGain();
+          break;
+        case 'density_change':
+          this.density = event.data.newDensity;
+          break;
+        case 'metronome_toggle':
+          this.metronomeOn = event.data.newState;
+          break;
+        case 'playback_start':
+          if (!this.isPlaying) this.start();
+          break;
+        case 'playback_stop':
+          if (this.isPlaying) this.stop();
+          break;
+        case 'clear_all':
+          this.tracks = JSON.parse(JSON.stringify(event.data.oldTracks));
+          break;
+        case 'randomize':
+          this.tracks = JSON.parse(JSON.stringify(event.data.newTracks));
+          break;
+      }
+    },
+    
+    // Export/Import session methods
+    exportSession() {
+      const sessionData = this.generateSessionData();
+      const sessionSeed = btoa(JSON.stringify(sessionData));
+      return sessionSeed;
+    },
+    
+    importSession(sessionSeed) {
+      try {
+        const sessionData = JSON.parse(atob(sessionSeed));
+        
+        if (!sessionData.version || sessionData.version !== '2.0') {
+          throw new Error('Versión de sesión no soportada');
+        }
+        
+        if (!sessionData.events || !Array.isArray(sessionData.events)) {
+          throw new Error('Formato de sesión inválido');
+        }
+        
+        // Apply final state
+        const finalState = sessionData.finalState;
+        this.bpm = finalState.bpm;
+        this.swing = finalState.swing;
+        this.masterGain = finalState.masterGain;
+        this.density = finalState.density;
+        this.tracks = JSON.parse(JSON.stringify(finalState.tracks));
+        this.metronomeOn = finalState.metronomeOn;
+        
+        return sessionData;
+      } catch (error) {
+        console.error('Error importing session:', error);
+        throw new Error('Error al importar la sesión. Verifica que el código sea válido.');
       }
     },
     toggleTheme() {
@@ -751,6 +1136,87 @@ export default {
       // Reiniciar la reproducción si el tamaño de la ventana cambia
       if (this.isPlaying) {
         this.toggle();
+      }
+    },
+
+    copySessionSeed() {
+      if (this.recordingSessionData) {
+        const sessionSeed = this.exportSession();
+        
+        try {
+          if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(sessionSeed).then(() => {
+              this.showCopySuccess = true;
+              setTimeout(() => {
+                this.showCopySuccess = false;
+              }, 2000);
+            });
+          } else {
+            // Fallback para navegadores antiguos
+            const textArea = document.createElement('textarea');
+            textArea.value = sessionSeed;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            
+            this.showCopySuccess = true;
+            setTimeout(() => {
+              this.showCopySuccess = false;
+            }, 2000);
+          }
+        } catch (err) {
+          console.error('Error al copiar sesión:', err);
+        }
+      }
+    },
+
+    getEventTypeName(type) {
+      const eventNames = {
+        'session_start': 'Inicio de Sesión',
+        'session_end': 'Fin de Sesión',
+        'step_toggle': 'Cambio de Paso',
+        'bpm_change': 'Cambio de Tempo',
+        'swing_change': 'Cambio de Swing',
+        'volume_change': 'Cambio de Volumen',
+        'density_change': 'Cambio de Densidad',
+        'metronome_toggle': 'Cambio de Metrónomo',
+        'playback_start': 'Reproducción Iniciada',
+        'playback_stop': 'Reproducción Detenida',
+        'clear_all': 'Limpiar Todos',
+        'randomize': 'Aleatorizar',
+        'track_added': 'Pista Añadida',
+        'track_removed': 'Pista Eliminada'
+      };
+      
+      return eventNames[type] || type;
+    },
+    
+    getEventDetails(event) {
+      switch (event.type) {
+        case 'step_toggle':
+          const trackName = this.tracks[event.data.trackIndex]?.name || 'Pista';
+          return `Pista: ${trackName}, Paso: ${event.data.stepIndex + 1}, Estado: ${event.data.newState ? 'Activado' : 'Desactivado'}`;
+        case 'bpm_change':
+          return `Nuevo Tempo: ${event.data.newBpm} BPM`;
+        case 'swing_change':
+          return `Nuevo Swing: ${Math.round(event.data.newSwing * 100)}%`;
+        case 'volume_change':
+          return `Nuevo Volumen: ${Math.round(event.data.newVolume * 100)}%`;
+        case 'density_change':
+          return `Nueva Densidad: ${Math.round(event.data.newDensity * 100)}%`;
+        case 'metronome_toggle':
+          return `Metrónomo: ${event.data.newState ? 'Encendido' : 'Apagado'}`;
+        case 'track_added':
+          return `Tipo: ${event.data.trackType}, Nombre: ${event.data.trackName}`;
+        case 'track_removed':
+          return `Nombre: ${event.data.trackName}, Tipo: ${event.data.trackType}`;
+        case 'clear_all':
+          return 'Todas las pistas limpiadas';
+        case 'randomize':
+          return `Densidad: ${Math.round(event.data.density * 100)}%`;
+        default:
+          return '';
       }
     }
   }

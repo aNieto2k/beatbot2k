@@ -579,6 +579,171 @@ code {
   margin-top: 12px;
 }
 
+/* Recording system styles */
+.recording-btn {
+  background: linear-gradient(90deg, #ff6b6b, #ee5a52);
+  border: none;
+  color: white;
+  padding: 12px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.recording-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(255, 107, 107, 0.3);
+}
+
+.recording-btn.recording {
+  background: linear-gradient(90deg, #ff4757, #ff3742);
+  animation: recording-pulse 2s infinite;
+}
+
+@keyframes recording-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(255, 71, 87, 0.7); }
+  70% { box-shadow: 0 0 0 10px rgba(255, 71, 87, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 71, 87, 0); }
+}
+
+.recording-info {
+  margin-bottom: 20px;
+}
+
+.recording-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  border: 1px solid var(--grid);
+}
+
+.stat {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.stat-label {
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.stat-value {
+  font-family: 'Courier New', monospace;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.recording-events {
+  margin-bottom: 24px;
+}
+
+.recording-events h4 {
+  margin-bottom: 12px;
+  color: var(--text);
+  font-size: 16px;
+}
+
+.events-list {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--grid);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.event-item {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--grid);
+  font-size: 12px;
+  transition: background-color 0.2s ease;
+}
+
+.event-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.event-item:last-child {
+  border-bottom: none;
+}
+
+.event-time {
+  font-family: 'Courier New', monospace;
+  color: var(--accent);
+  font-weight: 600;
+  min-width: 60px;
+  margin-right: 12px;
+}
+
+.event-type {
+  font-weight: 600;
+  color: var(--text);
+  min-width: 120px;
+  margin-right: 12px;
+}
+
+.event-details {
+  color: var(--muted);
+  flex: 1;
+  font-size: 11px;
+}
+
+.recording-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.recording-actions button {
+  flex: 1;
+  padding: 12px 16px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.recording-actions .copy-btn {
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  color: #0b0d18;
+}
+
+.recording-actions .play-btn {
+  background: linear-gradient(90deg, #2ed3a0, #1dd1a1);
+  color: #0b0d18;
+}
+
+.recording-actions button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* Recording indicator */
+.recording-indicator {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: rgba(255, 71, 87, 0.9);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  z-index: 1000;
+  animation: recording-pulse 2s infinite;
+}
+
 @media (max-width: 640px){ 
   /* Layout general */
   .wrap {
@@ -1365,5 +1530,33 @@ code {
   
   .mobile-device .modal {
     max-height: 80vh;
+  }
+}
+
+/* Mobile styles for recording */
+@media (max-width: 640px) {
+  .recording-stats {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  
+  .event-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  
+  .event-time,
+  .event-type {
+    min-width: auto;
+    margin-right: 0;
+  }
+  
+  .recording-actions {
+    flex-direction: column;
+  }
+  
+  .recording-actions button {
+    width: 100%;
   }
 }
