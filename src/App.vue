@@ -1,5 +1,47 @@
 <template>
-  <div class="wrap" :class="{ 'theme-light': isLightMode }">
+  <div class="wrap" :class="{ 'theme-light': isLightMode, 'playing': isPlaying || isPlayingSession }">
+    <!-- Efectos de fondo para reproducción -->
+    <div v-if="isPlaying || isPlayingSession" class="background-effects">
+      <div class="pulse-circles">
+        <div class="pulse-circle" v-for="i in 6" :key="i" :style="{ 
+          animationDelay: `${i * 0.5}s`,
+          animationDuration: `${60 / bpm * 4}s`
+        }"></div>
+      </div>
+      <div class="floating-particles">
+        <div class="particle" v-for="i in 12" :key="i" :style="{ 
+          left: `${Math.random() * 100}%`, 
+          animationDelay: `${Math.random() * 3}s`,
+          animationDuration: `${60 / bpm * 6 + Math.random() * 2}s`
+        }"></div>
+      </div>
+      <div class="beat-waves">
+        <div class="beat-wave" v-for="i in 4" :key="i" :style="{ 
+          animationDelay: `${i * (60 / bpm / 4)}s`,
+          animationDuration: `${60 / bpm * 2}s`
+        }"></div>
+      </div>
+      <div class="rhythm-grid">
+        <div class="grid-line" v-for="i in 8" :key="i" :style="{ 
+          animationDelay: `${i * (60 / bpm / 8)}s`,
+          animationDuration: `${60 / bpm}s`
+        }"></div>
+      </div>
+      <div class="active-step-effects">
+        <div v-for="(track, trackIndex) in tracks" :key="trackIndex" class="track-effect">
+          <div v-for="(step, stepIndex) in track.steps" :key="stepIndex" 
+               class="step-effect" 
+               :class="{ 'active': step && currentStep === stepIndex }"
+               :style="{ 
+                 left: `${(stepIndex / 15) * 100}%`,
+                 top: `${(trackIndex / (tracks.length - 1)) * 100}%`,
+                 animationDelay: `${stepIndex * (60 / bpm / 16)}s`
+               }">
+          </div>
+        </div>
+      </div>
+    </div>
+    
     <div class="card">
       <header>
         <h1>🥁 BeatBot2k</h1>
