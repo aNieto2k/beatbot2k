@@ -1,0 +1,251 @@
+:root {
+  --bg: #0f1220; 
+  --panel: #171a2b; 
+  --accent: #7c5cff; 
+  --accent2:#18c2ff; 
+  --text:#e9ecff;
+  --muted:#99a1c2; 
+  --grid:#232842; 
+  --on:#2a315a; 
+  --active:#2de3a0;
+}
+
+* { 
+  box-sizing: border-box; 
+}
+
+body { 
+  margin:0; 
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+  background: radial-gradient(1200px 600px at 70% -20%, #1d2140, #0b0d18 60%), var(--bg); 
+  color: var(--text); 
+}
+
+.wrap { 
+  max-width: 1080px; 
+  margin: 32px auto; 
+  padding: 16px; 
+}
+
+.card { 
+  background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01)); 
+  border: 1px solid #242948; 
+  border-radius: 16px; 
+  box-shadow: 0 10px 40px rgba(0,0,0,0.4); 
+}
+
+header { 
+  display:flex; 
+  align-items:center; 
+  justify-content:space-between; 
+  gap:12px; 
+  padding: 16px 20px; 
+  border-bottom: 1px solid #242948; 
+}
+
+h1 { 
+  font-size: 20px; 
+  margin:0; 
+  letter-spacing: .3px; 
+}
+
+.controls { 
+  display:flex; 
+  flex-wrap:wrap; 
+  gap:12px; 
+  align-items:center; 
+}
+
+button, .btn { 
+  background: var(--panel); 
+  border:1px solid #2b3154; 
+  color: var(--text); 
+  padding:10px 14px; 
+  border-radius: 12px; 
+  cursor:pointer; 
+  font-weight:600; 
+}
+
+button:hover { 
+  filter: brightness(1.06); 
+}
+
+.primary { 
+  background: linear-gradient(90deg, var(--accent) , var(--accent2)); 
+  border: none; 
+  color: #0b0d18; 
+}
+
+.toggle { 
+  display:inline-flex; 
+  align-items:center; 
+  gap:8px; 
+  padding: 10px 12px; 
+  background: var(--panel); 
+  border:1px solid #2b3154; 
+  border-radius: 12px; 
+}
+
+.led { 
+  width:10px; 
+  height:10px; 
+  border-radius:50%; 
+  background:#3b3f63; 
+  box-shadow: 0 0 0 2px #2b3154 inset; 
+}
+
+.led.on { 
+  background: var(--active); 
+  box-shadow: 0 0 12px var(--active), 0 0 0 2px #2b3154 inset; 
+}
+
+.grid { 
+  width:100%; 
+  overflow:auto; 
+}
+
+table { 
+  width:100%; 
+  border-collapse: collapse; 
+}
+
+th, td { 
+  padding: 0; 
+}
+
+thead th { 
+  position: sticky; 
+  top: 0; 
+  background: #111429; 
+  z-index: 2; 
+}
+
+.rowLabel { 
+  width: 160px; 
+  white-space:nowrap; 
+  padding: 10px 12px; 
+  font-weight: 700; 
+  color: var(--muted); 
+  border-right: 1px solid #242948; 
+  position: sticky; 
+  left: 0; 
+  background: #111429; 
+  z-index:1; 
+}
+
+.steps { 
+  display: grid; 
+  grid-template-columns: repeat(16, minmax(28px, 1fr)); 
+}
+
+.cell { 
+  aspect-ratio: 1 / 1; 
+  border-right: 1px solid #1e2341; 
+  border-bottom: 1px solid #1e2341; 
+  display:flex; 
+  align-items:center; 
+  justify-content:center; 
+  cursor:pointer; 
+}
+
+.cell:nth-child(4n) { 
+  border-right-color: #2a2f56; 
+}
+
+.cell .dot { 
+  width: 16px; 
+  height: 16px; 
+  border-radius: 6px; 
+  background: #12152d; 
+  border: 2px solid #30365f; 
+  transition: transform .08s ease, background .12s ease, border-color .12s ease, box-shadow .12s ease; 
+}
+
+.cell.active .dot { 
+  background: var(--on); 
+  border-color: #4a5390; 
+}
+
+.cell.now { 
+  background: #1a1f3f; 
+}
+
+.cell.active.now .dot { 
+  background: var(--active); 
+  border-color: #1df2b2; 
+  box-shadow: 0 0 18px rgba(45, 227, 160, .65); 
+  transform: scale(1.1); 
+}
+
+.panel { 
+  padding: 16px 20px; 
+  display:grid; 
+  grid-template-columns: 1fr; 
+  gap: 16px; 
+}
+
+.sliders { 
+  display:grid; 
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); 
+  gap: 16px; 
+}
+
+.slider { 
+  background: var(--panel); 
+  border:1px solid #2b3154; 
+  border-radius: 12px; 
+  padding: 12px; 
+}
+
+.slider label { 
+  display:flex; 
+  justify-content:space-between; 
+  font-size: 12px; 
+  color: var(--muted); 
+  margin-bottom: 6px; 
+}
+
+input[type="range"]{ 
+  width:100%; 
+}
+
+.small { 
+  font-size:12px; 
+  color: var(--muted); 
+}
+
+.footer { 
+  padding: 12px 20px; 
+  color: var(--muted); 
+  font-size: 12px; 
+  border-top: 1px solid #242948; 
+  display:flex; 
+  justify-content:space-between; 
+}
+
+.badges { 
+  display:flex; 
+  gap: 8px; 
+  align-items:center; 
+}
+
+.badge { 
+  padding: 4px 8px; 
+  border-radius: 999px; 
+  background:#141832; 
+  border:1px solid #2b3154; 
+  font-size: 11px; 
+}
+
+code { 
+  background:#12152d; 
+  padding: 2px 6px; 
+  border-radius: 6px; 
+  border:1px solid #2b3154; 
+}
+
+@media (max-width: 640px){ 
+  .rowLabel{ 
+    width: 120px; 
+  } 
+}
