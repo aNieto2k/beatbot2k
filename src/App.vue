@@ -7,6 +7,7 @@
           <button class="primary" @click="toggle()">{{ isPlaying ? 'Pausar' : 'Reproducir' }}</button>
           <button @click="randomize()">Aleatorizar</button>
           <button @click="clearAll()">Limpiar</button>
+          <button @click="showAddTrackModal = true" class="add-track-btn">+ Pista</button>
           <div class="toggle" @click="metronomeOn = !metronomeOn">
             <span class="led" :class="{on: metronomeOn}"></span>
             <span> Metrónomo </span>
@@ -19,7 +20,13 @@
           <table>
             <tbody>
               <tr v-for="(track, t) in tracks" :key="t">
-                <td class="rowLabel">{{ track.name }} <span class="small">· {{ track.type }}</span></td>
+                <td class="rowLabel">
+                  <div class="track-header">
+                    <span>{{ track.name }}</span>
+                    <span class="small">· {{ track.type }}</span>
+                    <button @click="removeTrack(t)" class="remove-track-btn" title="Eliminar pista">×</button>
+                  </div>
+                </td>
                 <td style="width:100%">
                   <div class="steps">
                     <div v-for="(on, s) in track.steps" :key="s"
@@ -55,7 +62,7 @@
 
         <div class="badges">
           <span class="badge">16 pasos</span>
-          <span class="badge">Kick / Snare / Closed Hat</span>
+          <span class="badge">{{ tracks.length }} pistas</span>
           <span class="badge">Sin muestras · síntesis</span>
         </div>
       </section>
@@ -63,6 +70,24 @@
       <div class="footer">
         <div>Hecho con <code>Vue 3</code> + <code>WebAudio API</code></div>
         <div class="small">Tip: pulsa cualquier celda para activarla. Usa "Aleatorizar" para inspiración rápida.</div>
+      </div>
+    </div>
+
+    <!-- Modal para añadir pistas -->
+    <div v-if="showAddTrackModal" class="modal-overlay" @click="showAddTrackModal = false">
+      <div class="modal" @click.stop>
+        <h3>Añadir nueva pista</h3>
+        <div class="track-types">
+          <div v-for="trackType in availableTrackTypes" :key="trackType.id" 
+               class="track-type" @click="addTrack(trackType)">
+            <div class="track-type-icon">{{ trackType.icon }}</div>
+            <div class="track-type-info">
+              <div class="track-type-name">{{ trackType.name }}</div>
+              <div class="track-type-desc">{{ trackType.description }}</div>
+            </div>
+          </div>
+        </div>
+        <button @click="showAddTrackModal = false" class="modal-close">Cancelar</button>
       </div>
     </div>
   </div>
@@ -89,10 +114,21 @@ export default {
       timerID: null,
       density: 0.35,
       tracks: [
-        { name: 'Kick',  type: 'synth', steps: Array(16).fill(false) },
-        { name: 'Snare', type: 'synth', steps: Array(16).fill(false) },
-        { name: 'Hat',   type: 'synth', steps: Array(16).fill(false) }
+        { name: 'Kick',  type: 'kick', steps: Array(16).fill(false) },
+        { name: 'Snare', type: 'snare', steps: Array(16).fill(false) },
+        { name: 'Hat',   type: 'hat', steps: Array(16).fill(false) }
       ],
+      showAddTrackModal: false,
+      availableTrackTypes: [
+        { id: 'kick', name: 'Kick', description: 'Bajo sintético', icon: '🥁' },
+        { id: 'snare', name: 'Snare', description: 'Caja sintética', icon: '🥁' },
+        { id: 'hat', name: 'Hi-Hat', description: 'Hi-hat sintético', icon: '🥁' },
+        { id: 'tom', name: 'Tom', description: 'Tom sintético', icon: '🥁' },
+        { id: 'clap', name: 'Clap', description: 'Aplauso sintético', icon: '👏' },
+        { id: 'cymbal', name: 'Cymbal', description: 'Plato sintético', icon: '🥁' },
+        { id: 'bass', name: 'Bass', description: 'Bajo sintético', icon: '🎸' },
+        { id: 'lead', name: 'Lead', description: 'Lead sintético', icon: '🎹' }
+      ]
     }
   },
   mounted() {
@@ -183,11 +219,39 @@ export default {
 
       this.tracks.forEach((t, idx) => {
         if(t.steps[step]) {
-          if(idx === 0) this.playKick(time);
-          if(idx === 1) this.playSnare(time);
-          if(idx === 2) this.playHat(time);
+          this.playTrack(t, time);
         }
       });
+    },
+    playTrack(track, time) {
+      switch(track.type) {
+        case 'kick':
+          this.playKick(time);
+          break;
+        case 'snare':
+          this.playSnare(time);
+          break;
+        case 'hat':
+          this.playHat(time);
+          break;
+        case 'tom':
+          this.playTom(time);
+          break;
+        case 'clap':
+          this.playClap(time);
+          break;
+        case 'cymbal':
+          this.playCymbal(time);
+          break;
+        case 'bass':
+          this.playBass(time);
+          break;
+        case 'lead':
+          this.playLead(time);
+          break;
+        default:
+          this.playKick(time); // fallback
+      }
     },
     // —— Sintetizadores ——
     playKick(time) {
@@ -243,6 +307,79 @@ export default {
       noise.start(time);
       noise.stop(time + 0.06);
     },
+    playTom(time) {
+      const o = this.audio.createOscillator();
+      const g = this.audio.createGain();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(200, time);
+      o.frequency.exponentialRampToValueAtTime(80, time + 0.15);
+      g.gain.setValueAtTime(0.8, time);
+      g.gain.exponentialRampToValueAtTime(0.001, time + 0.2);
+      o.connect(g).connect(this.master);
+      o.start(time);
+      o.stop(time + 0.2);
+    },
+    playClap(time) {
+      const bufferSize = this.audio.sampleRate * 0.1;
+      const buffer = this.audio.createBuffer(1, bufferSize, this.audio.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * 0.8;
+      }
+      const noise = this.audio.createBufferSource();
+      noise.buffer = buffer;
+      const hp = this.audio.createBiquadFilter();
+      hp.type = 'highpass';
+      hp.frequency.setValueAtTime(1000, time);
+      const g = this.audio.createGain();
+      g.gain.setValueAtTime(0.5, time);
+      g.gain.exponentialRampToValueAtTime(0.001, time + 0.1);
+      noise.connect(hp).connect(g).connect(this.master);
+      noise.start(time);
+      noise.stop(time + 0.1);
+    },
+    playCymbal(time) {
+      const bufferSize = this.audio.sampleRate * 0.3;
+      const buffer = this.audio.createBuffer(1, bufferSize, this.audio.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * 0.7;
+      }
+      const noise = this.audio.createBufferSource();
+      noise.buffer = buffer;
+      const hp = this.audio.createBiquadFilter();
+      hp.type = 'highpass';
+      hp.frequency.setValueAtTime(8000, time);
+      const g = this.audio.createGain();
+      g.gain.setValueAtTime(0.3, time);
+      g.gain.exponentialRampToValueAtTime(0.001, time + 0.3);
+      noise.connect(hp).connect(g).connect(this.master);
+      noise.start(time);
+      noise.stop(time + 0.3);
+    },
+    playBass(time) {
+      const o = this.audio.createOscillator();
+      const g = this.audio.createGain();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(80, time);
+      o.frequency.exponentialRampToValueAtTime(40, time + 0.2);
+      g.gain.setValueAtTime(0.6, time);
+      g.gain.exponentialRampToValueAtTime(0.001, time + 0.25);
+      o.connect(g).connect(this.master);
+      o.start(time);
+      o.stop(time + 0.25);
+    },
+    playLead(time) {
+      const o = this.audio.createOscillator();
+      const g = this.audio.createGain();
+      o.type = 'square';
+      o.frequency.setValueAtTime(440, time);
+      g.gain.setValueAtTime(0.4, time);
+      g.gain.exponentialRampToValueAtTime(0.001, time + 0.1);
+      o.connect(g).connect(this.master);
+      o.start(time);
+      o.stop(time + 0.1);
+    },
     playClick(time, freq = 1000) {
       const o = this.audio.createOscillator();
       const g = this.audio.createGain();
@@ -253,6 +390,20 @@ export default {
       o.connect(g).connect(this.master);
       o.start(time);
       o.stop(time + 0.04);
+    },
+    addTrack(trackType) {
+      const trackName = `${trackType.name} ${this.tracks.length + 1}`;
+      this.tracks.push({ 
+        name: trackName, 
+        type: trackType.id, 
+        steps: Array(16).fill(false) 
+      });
+      this.showAddTrackModal = false;
+    },
+    removeTrack(index) {
+      if (this.tracks.length > 1) {
+        this.tracks.splice(index, 1);
+      }
     }
   }
 }
