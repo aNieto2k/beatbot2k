@@ -359,6 +359,9 @@
               <button @click="exportSavedSession(session.id)" class="export-btn">
                 {{ session.exporting ? '✅ Copiado!' : '📤 Exportar' }}
               </button>
+              <button @click="shareSessionOnTwitter(session.id)" class="share-btn">
+                🐦 Compartir en X
+              </button>
               <button @click="deleteSession(session.id)" class="delete-btn">🗑️ Eliminar</button>
             </div>
           </div>
@@ -394,6 +397,49 @@
               📥 Importar Sesión
             </button>
             <button @click="showImportSessionModal = false" class="cancel-btn">
+              Cancelar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal para sesiones compartidas -->
+    <div v-if="showSharedSessionModalFlag" class="modal-overlay" @click="showSharedSessionModalFlag = false">
+      <div class="modal" @click.stop>
+        <h3>🎙️ Sesión Compartida</h3>
+        <div class="recording-info">
+          <div class="recording-stats">
+            <div class="stat">
+              <span class="stat-label">Duración:</span>
+              <span class="stat-value">{{ formatTime(sharedSessionData?.duration || 0) }}</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Eventos:</span>
+              <span class="stat-value">{{ sharedSessionData?.events?.length || 0 }}</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">ID de Sesión:</span>
+              <span class="stat-value">{{ sharedSessionData?.sessionId || 'N/A' }}</span>
+            </div>
+          </div>
+          
+          <div class="recording-events">
+            <h4>Eventos de la sesión:</h4>
+            <div class="events-list">
+              <div v-for="event in sharedSessionData?.events" :key="event.timestamp" class="event-item">
+                <span class="event-time">{{ event.sessionTime }}</span>
+                <span class="event-type">{{ getEventTypeName(event.type) }}</span>
+                <span class="event-details">{{ getEventDetails(event) }}</span>
+              </div>
+            </div>
+          </div>
+          
+          <div class="recording-actions">
+            <button @click="importSharedSession()" class="primary">
+              📥 Importar Sesión
+            </button>
+            <button @click="showSharedSessionModalFlag = false" class="modal-close">
               Cancelar
             </button>
           </div>
@@ -442,6 +488,7 @@ export default {
       showRecordingNameModal: false,
       showSessionsModal: false,
       showImportSessionModal: false, // Nuevo modal para importar sesión
+      showSharedSessionModalFlag: false, // Nuevo modal para sesiones compartidas
       
       // Export/Import
       importSeed: '',
@@ -496,6 +543,9 @@ export default {
       importSessionError: '',
       importSessionSuccess: false,
       importedSessionName: '',
+
+      // Shared session data
+      sharedSessionData: null,
     }
   },
   computed: {
@@ -575,6 +625,9 @@ export default {
     
     // Iniciar timer para actualizar progreso de sesión
     this.startSessionProgressTimer();
+
+    // Check for shared session URL
+    this.checkForSharedSession();
   },
   methods: {
     // Original methods that were overridden
@@ -1689,6 +1742,192 @@ export default {
         this.importSessionSuccess = false;
         this.importedSessionName = '';
       }
+    },
+
+    // Share session on Twitter/X
+    shareSessionOnTwitter(sessionId) {
+      const session = this.savedSessions.find(s => s.id === sessionId);
+      if (session) {
+        try {
+          // Compress session data for shorter URLs
+          const compressedData = this.compressSessionData(session.data);
+          const shareUrl = `${window.location.origin}/share/${compressedData}`;
+          
+          // Create share text
+          const shareText = `¡He creado un ritmo increíble con BeatBot2k! 🥁\n\n🎵 ${session.name}\n⏱️ Duración: ${this.formatTime(session.duration)}\n🎯 Eventos: ${session.eventsCount}\n🎼 Tempo: ${session.data.finalState?.bpm || 100} BPM\n\n🎮 Prueba mi sesión: ${shareUrl}\n\n#BeatBot2k #Music #Rhythm`;
+          
+          // Open Twitter/X share dialog
+          const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`;
+          window.open(twitterUrl, '_blank', 'width=600,height=400');
+          
+          console.log('🐦 Sharing session on Twitter:', session.name);
+        } catch (error) {
+          console.error('Error sharing session:', error);
+          alert('Error al compartir la sesión. Inténtalo de nuevo.');
+        }
+      }
+    },
+
+    // Compress session data for shorter URLs
+    compressSessionData(sessionData) {
+      try {
+        // Create a minimal version of the session data
+        const minimalData = {
+          v: '2.0', // version
+          n: sessionData.sessionId || 'session',
+          d: sessionData.duration || 0,
+          e: sessionData.events ? sessionData.events.length : 0,
+          f: sessionData.finalState ? {
+            b: sessionData.finalState.bpm || 100,
+            s: sessionData.finalState.swing || 0.1,
+            v: sessionData.finalState.masterGain || 0.85,
+            d: sessionData.finalState.density || 0.35,
+            t: sessionData.finalState.tracks || [],
+            m: sessionData.finalState.metronomeOn || false
+          } : null,
+          ev: sessionData.events ? sessionData.events.map(event => ({
+            t: event.type,
+            ts: event.timestamp,
+            d: event.data
+          })) : []
+        };
+
+        // Convert to JSON
+        const jsonData = JSON.stringify(minimalData);
+        
+        // Compress using a more efficient method
+        let compressed = this.compressString(jsonData);
+        
+        // Make URL-safe
+        compressed = compressed
+          .replace(/\+/g, '-')
+          .replace(/\//g, '_')
+          .replace(/=/g, '');
+        
+        // If still too long, truncate and add hash
+        if (compressed.length > 1500) {
+          const hash = this.generateHash(jsonData);
+          compressed = compressed.substring(0, 1200) + '_' + hash.substring(0, 8);
+        }
+        
+        return compressed;
+      } catch (error) {
+        console.error('Error compressing session data:', error);
+        throw new Error('Error al comprimir los datos de la sesión');
+      }
+    },
+
+    // Simple string compression
+    compressString(str) {
+      // Remove unnecessary whitespace and quotes
+      let compressed = str.replace(/\s+/g, '').replace(/"/g, '');
+      
+      // Replace common patterns with shorter codes
+      const replacements = {
+        'session_start': 'ss',
+        'session_end': 'se',
+        'step_toggle': 'st',
+        'bpm_change': 'bc',
+        'swing_change': 'sc',
+        'volume_change': 'vc',
+        'density_change': 'dc',
+        'metronome_toggle': 'mt',
+        'playback_start': 'ps',
+        'playback_stop': 'pst',
+        'clear_all': 'ca',
+        'randomize': 'r',
+        'track_added': 'ta',
+        'track_removed': 'tr'
+      };
+      
+      for (const [key, value] of Object.entries(replacements)) {
+        compressed = compressed.replace(new RegExp(key, 'g'), value);
+      }
+      
+      // Encode to base64
+      return btoa(compressed);
+    },
+
+    // Decompress session data from URL
+    decompressSessionData(compressedData) {
+      try {
+        // Restore URL-safe characters
+        let decompressed = compressedData
+          .replace(/-/g, '+')
+          .replace(/_/g, '/');
+        
+        // Add padding if needed
+        while (decompressed.length % 4) {
+          decompressed += '=';
+        }
+        
+        // Decode base64
+        const jsonData = atob(decompressed);
+        
+        // Restore common patterns
+        let restored = jsonData;
+        const replacements = {
+          'ss': 'session_start',
+          'se': 'session_end',
+          'st': 'step_toggle',
+          'bc': 'bpm_change',
+          'sc': 'swing_change',
+          'vc': 'volume_change',
+          'dc': 'density_change',
+          'mt': 'metronome_toggle',
+          'ps': 'playback_start',
+          'pst': 'playback_stop',
+          'ca': 'clear_all',
+          'r': 'randomize',
+          'ta': 'track_added',
+          'tr': 'track_removed'
+        };
+        
+        for (const [key, value] of Object.entries(replacements)) {
+          restored = restored.replace(new RegExp(key, 'g'), value);
+        }
+        
+        // Parse JSON
+        const sessionData = JSON.parse(restored);
+        
+        // Restore full session data structure
+        return {
+          version: sessionData.v,
+          sessionId: sessionData.n,
+          duration: sessionData.d,
+          events: sessionData.ev.map(event => ({
+            type: event.t,
+            timestamp: event.ts,
+            data: event.d,
+            sessionTime: this.formatTime(event.ts)
+          })),
+          finalState: sessionData.f ? {
+            bpm: sessionData.f.b,
+            swing: sessionData.f.s,
+            masterGain: sessionData.f.v,
+            density: sessionData.f.d,
+            tracks: sessionData.f.t,
+            metronomeOn: sessionData.f.m
+          } : null
+        };
+      } catch (error) {
+        console.error('Error decompressing session data:', error);
+        throw new Error('Error al descomprimir los datos de la sesión');
+      }
+    },
+
+    // Generate a simple hash for data integrity
+    generateHash(data) {
+      let hash = 0;
+      if (data.length === 0) return hash.toString();
+      
+      for (let i = 0; i < data.length; i++) {
+        const char = data.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // Convert to 32-bit integer
+      }
+      
+      return Math.abs(hash).toString(36);
     }
   },
   startSessionProgressTimer() {
@@ -1699,6 +1938,73 @@ export default {
           this.sessionPlaybackProgress = Math.min(currentTime, this.currentSession?.duration || 0);
         }
       }, 100);
+    },
+    checkForSharedSession() {
+      const path = window.location.pathname;
+      const shareMatch = path.match(/\/share\/(.+)/);
+      
+      if (shareMatch) {
+        const compressedData = shareMatch[1];
+        try {
+          const sessionData = this.decompressSessionData(compressedData);
+          
+          // Show a modal to confirm importing the shared session
+          this.showSharedSessionModal(sessionData);
+        } catch (error) {
+          console.error('Error loading shared session:', error);
+          alert('Error al cargar la sesión compartida. El enlace puede estar corrupto o expirado.');
+        }
+      }
+    },
+
+    // Show modal for shared session
+    showSharedSessionModal(sessionData) {
+      this.sharedSessionData = sessionData;
+      this.showSharedSessionModalFlag = true;
+    },
+
+    // Import shared session
+    importSharedSession() {
+      if (this.sharedSessionData) {
+        try {
+          // Generate a name for the imported session
+          const sessionName = this.sharedSessionData.sessionId ? 
+            `Sesión Compartida - ${new Date().toLocaleDateString()}` : 
+            'Sesión Compartida';
+          
+          // Add the imported session to savedSessions
+          const importedSession = {
+            id: this.generateSessionId(),
+            name: sessionName,
+            timestamp: Date.now(),
+            duration: this.sharedSessionData.duration || 0,
+            eventsCount: this.sharedSessionData.events ? this.sharedSessionData.events.length : 0,
+            data: this.sharedSessionData,
+            exporting: false
+          };
+
+          this.savedSessions.unshift(importedSession);
+          this.saveSessionsToStorage();
+
+          console.log('📥 Shared session imported:', importedSession);
+
+          // Close modal and show success
+          this.showSharedSessionModalFlag = false;
+          this.sharedSessionData = null;
+          
+          // Show success message
+          this.showImportSuccess = true;
+          this.importedSessionName = sessionName;
+          setTimeout(() => {
+            this.showImportSuccess = false;
+            this.importedSessionName = '';
+          }, 3000);
+
+        } catch (error) {
+          console.error('Error importing shared session:', error);
+          alert('Error al importar la sesión compartida.');
+        }
+      }
     }
 }
 </script>
