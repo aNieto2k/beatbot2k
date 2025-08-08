@@ -1,5 +1,5 @@
 <template>
-  <div class="wrap">
+  <div class="wrap" :class="{ 'theme-light': isLightMode }">
     <div class="card">
       <header>
         <h1>🥁 BeatBot — Vue + Web Audio</h1>
@@ -10,6 +10,9 @@
           <button @click="showAddTrackModal = true" class="add-track-btn">+ Pista</button>
           <button @click="showExportModal = true" class="export-btn">📤 Exportar</button>
           <button @click="showImportModal = true" class="import-btn">📥 Importar</button>
+          <div class="theme-toggle" @click="toggleTheme" :title="isLightMode ? 'Cambiar a modo oscuro' : 'Cambiar a modo claro'">
+            <span class="theme-icon">{{ isLightMode ? '🌙' : '☀️' }}</span>
+          </div>
           <div class="toggle" @click="metronomeOn = !metronomeOn">
             <span class="led" :class="{on: metronomeOn}"></span>
             <span> Metrónomo </span>
@@ -191,7 +194,8 @@ export default {
         { id: 'lead', name: 'Lead', description: 'Lead sintético', icon: '🎹' }
       ],
       showCopySuccess: false,
-      showImportSuccess: false
+      showImportSuccess: false,
+      isLightMode: true // Nuevo estado para el tema
     }
   },
   computed: {
@@ -219,6 +223,16 @@ export default {
     this.tracks[0].steps = [true,false,false,false, true,false,false,false, true,false,false,false, true,false,false,false]; // kick a negras
     this.tracks[1].steps = [false,false,false,false, true,false,false,false, false,false,false,false, true,false,false,false]; // snare en 2 y 4
     this.tracks[2].steps = [true,true,true,true, true,true,true,true, true,true,true,true, true,true,true,true]; // hats a corcheas
+
+    // Inicializar tema desde localStorage
+    const savedTheme = localStorage.getItem('beatbot-theme');
+    if (savedTheme) {
+      this.isLightMode = savedTheme === 'light';
+    } else {
+      // Detectar preferencia del sistema
+      this.isLightMode = window.matchMedia('(prefers-color-scheme: light)').matches;
+    }
+    this.applyTheme();
 
     // Pausar si se oculta la pestaña (evita desincronía)
     document.addEventListener('visibilitychange', () => {
@@ -572,6 +586,15 @@ export default {
         console.error('Error al importar:', error);
         this.importError = 'Error al importar el patrón. Verifica que el código sea válido.';
       }
+    },
+    toggleTheme() {
+      this.isLightMode = !this.isLightMode;
+      this.applyTheme();
+      localStorage.setItem('beatbot-theme', this.isLightMode ? 'light' : 'dark');
+    },
+    applyTheme() {
+      document.documentElement.classList.toggle('theme-light', this.isLightMode);
+      document.documentElement.classList.toggle('theme-dark', !this.isLightMode);
     }
   }
 }
