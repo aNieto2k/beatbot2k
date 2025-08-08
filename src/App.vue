@@ -297,6 +297,11 @@
         <div v-if="showCopySuccess" class="copy-success-message">
           ✅ Sesión copiada al portapapeles
         </div>
+        <div class="sessions-modal-controls">
+          <button @click="showImportSessionModal = true" class="import-session-btn">
+            📥 Importar Sesión de Amigo
+          </button>
+        </div>
         <div class="saved-sessions-list">
           <div v-if="savedSessions.length === 0" class="no-sessions-message">
             No hay sesiones guardadas.
@@ -317,6 +322,40 @@
           </div>
         </div>
         <button @click="showSessionsModal = false" class="modal-close">Cerrar</button>
+      </div>
+    </div>
+
+    <!-- Modal para importar sesión de amigo -->
+    <div v-if="showImportSessionModal" class="modal-overlay" @click="showImportSessionModal = false">
+      <div class="modal" @click.stop>
+        <h3>📥 Importar Sesión de Amigo</h3>
+        <div class="import-session-content">
+          <p class="import-instructions">
+            Pega aquí el código de sesión que te compartió tu amigo:
+          </p>
+          <div class="import-input-container">
+            <textarea 
+              v-model="importSessionSeed" 
+              placeholder="Pega el código de sesión aquí..."
+              class="import-session-textarea"
+              rows="6"
+            ></textarea>
+          </div>
+          <div v-if="importSessionError" class="import-error">
+            ❌ {{ importSessionError }}
+          </div>
+          <div v-if="importSessionSuccess" class="import-success">
+            ✅ Sesión importada correctamente: {{ importedSessionName }}
+          </div>
+          <div class="import-session-actions">
+            <button @click="importSessionFromSeed()" class="import-btn" :disabled="!importSessionSeed.trim()">
+              📥 Importar Sesión
+            </button>
+            <button @click="showImportSessionModal = false" class="cancel-btn">
+              Cancelar
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -360,6 +399,7 @@ export default {
       showRecordingModal: false,
       showRecordingNameModal: false,
       showSessionsModal: false,
+      showImportSessionModal: false, // Nuevo modal para importar sesión
       
       // Export/Import
       importSeed: '',
@@ -383,6 +423,13 @@ export default {
       // Sessions management
       savedSessions: [],
       showSessionsModal: false,
+      showImportSessionModal: false,
+      
+      // Import session modal
+      importSessionSeed: '',
+      importSessionError: '',
+      importSessionSuccess: false,
+      importedSessionName: '',
       
       // Session playback state
       isPlayingSession: false,
@@ -400,7 +447,13 @@ export default {
         { id: 'cymbal', name: 'Cymbal', description: 'Platillo crash', icon: '🥁' },
         { id: 'bass', name: 'Bass', description: 'Bajo sintético', icon: '🎸' },
         { id: 'lead', name: 'Lead', description: 'Lead sintético', icon: '🎹' }
-      ]
+      ],
+
+      // New data for import session modal
+      importSessionSeed: '',
+      importSessionError: '',
+      importSessionSuccess: false,
+      importedSessionName: '',
     }
   },
   computed: {
@@ -1531,6 +1584,69 @@ export default {
       this.showRecordingNameModal = false;
       this.recordingSessionName = '';
       this.recordingSessionData = null;
+    },
+
+    // New methods for import session modal
+    importSessionFromSeed() {
+      if (!this.importSessionSeed.trim()) {
+        this.importSessionError = 'Por favor, introduce un código de sesión válido.';
+        return;
+      }
+
+      try {
+        // Parse the session data without applying it to current state
+        const sessionSeed = this.importSessionSeed.trim();
+        const sessionData = JSON.parse(atob(sessionSeed));
+        
+        if (!sessionData.version || sessionData.version !== '2.0') {
+          throw new Error('Versión de sesión no soportada');
+        }
+        
+        if (!sessionData.events || !Array.isArray(sessionData.events)) {
+          throw new Error('Formato de sesión inválido');
+        }
+        
+        // Clear any previous errors
+        this.importSessionError = '';
+        this.importSessionSuccess = true;
+        
+        // Generate a name for the imported session
+        const sessionName = sessionData.sessionId ? 
+          `Sesión de ${sessionData.sessionId.split('_')[1] ? new Date(parseInt(sessionData.sessionId.split('_')[1])).toLocaleDateString() : 'Amigo'}` : 
+          'Sesión Importada';
+        
+        this.importedSessionName = sessionName;
+
+        // Add the imported session to savedSessions
+        const importedSession = {
+          id: this.generateSessionId(),
+          name: sessionName,
+          timestamp: Date.now(),
+          duration: sessionData.duration || 0,
+          eventsCount: sessionData.events ? sessionData.events.length : 0,
+          data: sessionData,
+          exporting: false
+        };
+
+        this.savedSessions.unshift(importedSession);
+        this.saveSessionsToStorage();
+
+        console.log('📥 Session imported:', importedSession);
+
+        // Clear the form and show success message
+        setTimeout(() => {
+          this.importSessionSuccess = false;
+          this.importedSessionName = '';
+          this.importSessionSeed = '';
+          this.showImportSessionModal = false;
+        }, 3000);
+
+      } catch (error) {
+        console.error('Error importing session:', error);
+        this.importSessionError = error.message || 'Error al importar la sesión. Verifica que el código sea válido.';
+        this.importSessionSuccess = false;
+        this.importedSessionName = '';
+      }
     }
   },
   startSessionProgressTimer() {
