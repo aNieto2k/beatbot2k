@@ -368,8 +368,8 @@
               <button @click="exportSavedSession(session.id)" class="export-btn">
                 {{ session.exporting ? '✅ Copiado!' : '📤 Exportar' }}
               </button>
-              <button @click="shareSessionOnTwitter(session.id)" class="share-btn" :disabled="isSharingSession">
-                {{ isSharingSession ? '⏳ Acortando...' : '🐦 Compartir en X' }}
+              <button @click="showShareModal = true; currentShareSession = session; generateShareUrl(session.id)" class="share-btn">
+                📤 Compartir
               </button>
               <button @click="deleteSession(session.id)" class="delete-btn">🗑️ Eliminar</button>
             </div>
@@ -450,6 +450,47 @@
             </button>
             <button @click="showSharedSessionModalFlag = false" class="modal-close">
               Cancelar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal de compartir -->
+    <div v-if="showShareModal" class="modal-overlay" @click="showShareModal = false">
+      <div class="modal" @click.stop>
+        <h3>📤 Compartir Sesión</h3>
+        <div class="share-section">
+          <div v-if="currentShareSession" class="share-session-info">
+            <div class="session-summary">
+              <h4>{{ currentShareSession.name }}</h4>
+              <div class="session-details">
+                <span class="detail-item">⏱️ Duración: {{ formatTime(currentShareSession.duration) }}</span>
+                <span class="detail-item">🎯 Eventos: {{ currentShareSession.eventsCount }}</span>
+                <span class="detail-item">🎼 Tempo: {{ currentShareSession.data?.finalState?.bpm || 100 }} BPM</span>
+              </div>
+            </div>
+          </div>
+          
+          <div class="share-url-section">
+            <p class="share-description">Comparte esta sesión con amigos usando el siguiente enlace:</p>
+            <div class="url-container">
+              <input 
+                :value="shareUrl" 
+                readonly 
+                class="url-input" 
+                ref="shareUrlInput"
+                @click="copyShareUrl"
+              />
+              <button @click="copyShareUrl" class="copy-url-btn">
+                {{ showCopyUrlSuccess ? '✅ Copiado!' : '📋 Copiar' }}
+              </button>
+            </div>
+          </div>
+          
+          <div class="share-actions">
+            <button @click="showShareModal = false" class="modal-close">
+              Cerrar
             </button>
           </div>
         </div>
@@ -559,6 +600,12 @@ export default {
       // Share functionality
       isSharingSession: false,
       showShareSuccess: false,
+      
+      // New share modal
+      showShareModal: false,
+      currentShareSession: null,
+      shareUrl: '',
+      showCopyUrlSuccess: false,
     }
   },
   computed: {
@@ -1529,7 +1576,7 @@ export default {
         'clear_all': 'Limpiar Todos',
         'randomize': 'Aleatorizar',
         'track_added': 'Pista Añadida',
-        'track_removed': 'Pista Eliminada'
+        'track_removed': 'Pista Eliminada',
       };
       
       return eventNames[type] || type;
@@ -1757,45 +1804,6 @@ export default {
       }
     },
 
-    // Share session on Twitter/X
-    async shareSessionOnTwitter(sessionId) {
-      const session = this.savedSessions.find(s => s.id === sessionId);
-      if (session) {
-        try {
-          // Show loading state
-          this.isSharingSession = true;
-          
-          // Compress session data for shorter URLs
-          const compressedData = this.compressSessionData(session.data);
-          const originalUrl = `${window.location.origin}/share/${compressedData}`;
-          
-          // Shorten URL using TinyURL
-          const shortUrl = await this.shortenUrl(originalUrl);
-          
-          // Create share text with shortened URL
-          const shareText = `¡He creado un ritmo increíble con BeatBot2k! 🥁\n\n🎵 ${session.name}\n⏱️ Duración: ${this.formatTime(session.duration)}\n🎯 Eventos: ${session.eventsCount}\n🎼 Tempo: ${session.data.finalState?.bpm || 100} BPM\n\n🎮 Prueba mi sesión: ${shortUrl}\n\n#BeatBot2k #Music #Rhythm`;
-          
-          // Open Twitter/X share dialog
-          const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`;
-          window.open(twitterUrl, '_blank', 'width=600,height=400');
-          
-          console.log('🐦 Sharing session on Twitter:', session.name, 'Short URL:', shortUrl);
-          
-          // Show success message
-          this.showShareSuccess = true;
-          setTimeout(() => {
-            this.showShareSuccess = false;
-          }, 3000);
-          
-        } catch (error) {
-          console.error('Error sharing session:', error);
-          alert('Error al compartir la sesión. Inténtalo de nuevo.');
-        } finally {
-          this.isSharingSession = false;
-        }
-      }
-    },
-
     // Shorten URL using TinyURL
     async shortenUrl(longUrl) {
       try {
@@ -2001,9 +2009,59 @@ export default {
       }
       
       return Math.abs(hash).toString(36);
-    }
-  },
-  startSessionProgressTimer() {
+    },
+
+    // Generate share URL for session
+    generateShareUrl(sessionId) {
+      const session = this.savedSessions.find(s => s.id === sessionId);
+      if (session) {
+        try {
+          // Compress session data for shorter URLs
+          const compressedData = this.compressSessionData(session.data);
+          const shareUrl = `${window.location.origin}/share/${compressedData}`;
+          this.shareUrl = shareUrl;
+          console.log('🔗 Generated share URL:', shareUrl);
+        } catch (error) {
+          console.error('Error generating share URL:', error);
+          this.shareUrl = 'Error al generar el enlace';
+        }
+      }
+    },
+
+    // Copy share URL
+    copyShareUrl() {
+      const shareUrlInput = this.$refs.shareUrlInput;
+      if (shareUrlInput) {
+        shareUrlInput.select();
+        shareUrlInput.setSelectionRange(0, 99999);
+        
+        try {
+          if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(this.shareUrl).then(() => {
+              this.showCopyUrlSuccess = true;
+              setTimeout(() => {
+                this.showCopyUrlSuccess = false;
+              }, 2000);
+            });
+          } else {
+            document.execCommand('copy');
+            this.showCopyUrlSuccess = true;
+            setTimeout(() => {
+              this.showCopyUrlSuccess = false;
+            }, 2000);
+          }
+        } catch (err) {
+          console.error('Error al copiar URL:', err);
+        }
+      }
+    },
+
+    // Minimize share modal
+    minimizeShareModal() {
+      this.showShareModal = false;
+    },
+
+    startSessionProgressTimer() {
       // Actualizar progreso de sesión cada 100ms
       setInterval(() => {
         if (this.isPlayingSession && this.sessionPlaybackStartTime) {
@@ -2012,6 +2070,7 @@ export default {
         }
       }, 100);
     },
+
     checkForSharedSession() {
       const path = window.location.pathname;
       const shareMatch = path.match(/\/share\/(.+)/);
@@ -2079,5 +2138,6 @@ export default {
         }
       }
     }
+  }
 }
 </script>
