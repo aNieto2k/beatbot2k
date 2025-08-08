@@ -294,6 +294,9 @@
     <div v-if="showSessionsModal" class="modal-overlay" @click="showSessionsModal = false">
       <div class="modal" @click.stop>
         <h3>Sesiones Guardadas</h3>
+        <div v-if="showCopySuccess" class="copy-success-message">
+          ✅ Sesión copiada al portapapeles
+        </div>
         <div class="saved-sessions-list">
           <div v-if="savedSessions.length === 0" class="no-sessions-message">
             No hay sesiones guardadas.
@@ -306,7 +309,9 @@
             </div>
             <div class="session-actions">
               <button @click="playSavedSession(session.id)" class="play-btn">▶️ Reproducir</button>
-              <button @click="exportSavedSession(session.id)" class="export-btn">📤 Exportar</button>
+              <button @click="exportSavedSession(session.id)" class="export-btn">
+                {{ session.exporting ? '✅ Copiado!' : '📤 Exportar' }}
+              </button>
               <button @click="deleteSession(session.id)" class="delete-btn">🗑️ Eliminar</button>
             </div>
           </div>
@@ -1403,6 +1408,10 @@ export default {
       if (saved) {
         try {
           this.savedSessions = JSON.parse(saved);
+          // Initialize exporting state for each session
+          this.savedSessions.forEach(session => {
+            session.exporting = false;
+          });
         } catch (error) {
           console.error('Error loading saved sessions:', error);
           this.savedSessions = [];
@@ -1421,7 +1430,8 @@ export default {
         timestamp: Date.now(),
         duration: sessionData.duration,
         eventsCount: sessionData.events.length,
-        data: sessionData
+        data: sessionData,
+        exporting: false
       };
       
       this.savedSessions.unshift(session); // Añadir al principio
@@ -1441,17 +1451,26 @@ export default {
     },
     
     exportSavedSession(sessionId) {
-      const session = this.savedSessions.find(s => s.id === sessionId);
-      if (session) {
+      const sessionIndex = this.savedSessions.findIndex(s => s.id === sessionId);
+      if (sessionIndex !== -1) {
+        const session = this.savedSessions[sessionIndex];
         const sessionSeed = btoa(JSON.stringify(session.data));
+        
+        // Set exporting state for this session
+        this.savedSessions[sessionIndex] = { ...session, exporting: true };
         
         try {
           if (navigator.clipboard && window.isSecureContext) {
             navigator.clipboard.writeText(sessionSeed).then(() => {
+              // Show success feedback
               this.showCopySuccess = true;
               setTimeout(() => {
+                this.savedSessions[sessionIndex] = { ...this.savedSessions[sessionIndex], exporting: false };
                 this.showCopySuccess = false;
               }, 2000);
+            }).catch(err => {
+              console.error('Error al copiar sesión:', err);
+              this.savedSessions[sessionIndex] = { ...this.savedSessions[sessionIndex], exporting: false };
             });
           } else {
             // Fallback para navegadores antiguos
@@ -1462,13 +1481,16 @@ export default {
             document.execCommand('copy');
             document.body.removeChild(textArea);
             
+            // Show success feedback
             this.showCopySuccess = true;
             setTimeout(() => {
+              this.savedSessions[sessionIndex] = { ...this.savedSessions[sessionIndex], exporting: false };
               this.showCopySuccess = false;
             }, 2000);
           }
         } catch (err) {
           console.error('Error al copiar sesión:', err);
+          this.savedSessions[sessionIndex] = { ...this.savedSessions[sessionIndex], exporting: false };
         }
         
         return sessionSeed;
