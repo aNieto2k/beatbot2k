@@ -171,6 +171,12 @@
         <div v-if="showSaveSuccess" class="save-success">
           ✅ Sesión guardada correctamente
         </div>
+        <div v-if="showCopySuccess" class="copy-success-message">
+          ✅ Sesión copiada al portapapeles
+        </div>
+        <div v-if="showShareSuccess" class="share-success-message">
+          🐦 ¡Sesión compartida en X/Twitter!
+        </div>
       </section>
 
       <div class="footer">
@@ -339,6 +345,9 @@
         <div v-if="showCopySuccess" class="copy-success-message">
           ✅ Sesión copiada al portapapeles
         </div>
+        <div v-if="showShareSuccess" class="share-success-message">
+          🐦 ¡Sesión compartida en X/Twitter!
+        </div>
         <div class="sessions-modal-controls">
           <button @click="showImportSessionModal = true" class="import-session-btn">
             📥 Importar Sesión de Amigo
@@ -359,8 +368,8 @@
               <button @click="exportSavedSession(session.id)" class="export-btn">
                 {{ session.exporting ? '✅ Copiado!' : '📤 Exportar' }}
               </button>
-              <button @click="shareSessionOnTwitter(session.id)" class="share-btn">
-                🐦 Compartir en X
+              <button @click="shareSessionOnTwitter(session.id)" class="share-btn" :disabled="isSharingSession">
+                {{ isSharingSession ? '⏳ Acortando...' : '🐦 Compartir en X' }}
               </button>
               <button @click="deleteSession(session.id)" class="delete-btn">🗑️ Eliminar</button>
             </div>
@@ -546,6 +555,10 @@ export default {
 
       // Shared session data
       sharedSessionData: null,
+      
+      // Share functionality
+      isSharingSession: false,
+      showShareSuccess: false,
     }
   },
   computed: {
@@ -1745,25 +1758,85 @@ export default {
     },
 
     // Share session on Twitter/X
-    shareSessionOnTwitter(sessionId) {
+    async shareSessionOnTwitter(sessionId) {
       const session = this.savedSessions.find(s => s.id === sessionId);
       if (session) {
         try {
+          // Show loading state
+          this.isSharingSession = true;
+          
           // Compress session data for shorter URLs
           const compressedData = this.compressSessionData(session.data);
-          const shareUrl = `${window.location.origin}/share/${compressedData}`;
+          const originalUrl = `${window.location.origin}/share/${compressedData}`;
           
-          // Create share text
-          const shareText = `¡He creado un ritmo increíble con BeatBot2k! 🥁\n\n🎵 ${session.name}\n⏱️ Duración: ${this.formatTime(session.duration)}\n🎯 Eventos: ${session.eventsCount}\n🎼 Tempo: ${session.data.finalState?.bpm || 100} BPM\n\n🎮 Prueba mi sesión: ${shareUrl}\n\n#BeatBot2k #Music #Rhythm`;
+          // Shorten URL using TinyURL
+          const shortUrl = await this.shortenUrl(originalUrl);
+          
+          // Create share text with shortened URL
+          const shareText = `¡He creado un ritmo increíble con BeatBot2k! 🥁\n\n🎵 ${session.name}\n⏱️ Duración: ${this.formatTime(session.duration)}\n🎯 Eventos: ${session.eventsCount}\n🎼 Tempo: ${session.data.finalState?.bpm || 100} BPM\n\n🎮 Prueba mi sesión: ${shortUrl}\n\n#BeatBot2k #Music #Rhythm`;
           
           // Open Twitter/X share dialog
           const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`;
           window.open(twitterUrl, '_blank', 'width=600,height=400');
           
-          console.log('🐦 Sharing session on Twitter:', session.name);
+          console.log('🐦 Sharing session on Twitter:', session.name, 'Short URL:', shortUrl);
+          
+          // Show success message
+          this.showShareSuccess = true;
+          setTimeout(() => {
+            this.showShareSuccess = false;
+          }, 3000);
+          
         } catch (error) {
           console.error('Error sharing session:', error);
           alert('Error al compartir la sesión. Inténtalo de nuevo.');
+        } finally {
+          this.isSharingSession = false;
+        }
+      }
+    },
+
+    // Shorten URL using TinyURL
+    async shortenUrl(longUrl) {
+      try {
+        // Use TinyURL API (free, no API key required)
+        const response = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(longUrl)}`);
+        
+        if (!response.ok) {
+          throw new Error('Error al acortar la URL');
+        }
+        
+        const shortUrl = await response.text();
+        
+        // Validate that we got a proper URL back
+        if (!shortUrl.startsWith('http')) {
+          throw new Error('URL acortada inválida');
+        }
+        
+        return shortUrl;
+      } catch (error) {
+        console.error('Error shortening URL:', error);
+        
+        // Fallback: try alternative URL shortener (is.gd)
+        try {
+          const response = await fetch(`https://is.gd/create.php?format=simple&url=${encodeURIComponent(longUrl)}`);
+          
+          if (!response.ok) {
+            throw new Error('Error con URL shortener alternativo');
+          }
+          
+          const shortUrl = await response.text();
+          
+          if (!shortUrl.startsWith('http')) {
+            throw new Error('URL acortada inválida');
+          }
+          
+          return shortUrl;
+        } catch (fallbackError) {
+          console.error('Error with fallback URL shortener:', fallbackError);
+          
+          // If all URL shorteners fail, return the original URL
+          return longUrl;
         }
       }
     },
