@@ -2,7 +2,7 @@
   <div class="wrap" :class="{ 'theme-light': isLightMode }">
     <div class="card">
       <header>
-        <h1>🥁 BeatBot — Vue + Web Audio</h1>
+        <h1>🥁 BeatBot2k</h1>
         <div class="controls">
           <button class="primary" @click="toggle()">{{ isPlaying ? 'Pausar' : 'Reproducir' }}</button>
           <button @click="randomize()">Aleatorizar</button>
@@ -24,21 +24,26 @@
         <div class="grid">
           <table>
             <tbody>
-              <tr v-for="(track, t) in tracks" :key="t">
+              <tr v-for="(track, trackIndex) in tracks" :key="trackIndex">
                 <td class="rowLabel">
                   <div class="track-header">
                     <span>{{ track.name }}</span>
-                    <span class="small">· {{ track.type }}</span>
-                    <button @click="removeTrack(t)" class="remove-track-btn" title="Eliminar pista">×</button>
+                    <button v-if="tracks.length > 1" @click="removeTrack(trackIndex)" class="remove-track-btn" :title="`Eliminar ${track.name}`">×</button>
                   </div>
                 </td>
-                <td style="width:100%">
-                  <div class="steps">
-                    <div v-for="(on, s) in track.steps" :key="s"
-                         class="cell" :class="{active: on, now: currentStep === s}"
-                         @click="toggleStep(t, s)">
-                      <div class="dot"></div>
-                    </div>
+                <td class="steps" :data-track-index="trackIndex">
+                  <div 
+                    v-for="(step, stepIndex) in track.steps" 
+                    :key="stepIndex"
+                    class="cell" 
+                    :class="{ 
+                      active: step, 
+                      now: currentStep === stepIndex 
+                    }"
+                    @click="toggleStep(trackIndex, stepIndex)"
+                    :title="`${step ? 'Desactivar' : 'Activar'} paso ${stepIndex + 1} de ${track.name}`"
+                  >
+                    <div class="dot"></div>
                   </div>
                 </td>
               </tr>
@@ -195,7 +200,8 @@ export default {
       ],
       showCopySuccess: false,
       showImportSuccess: false,
-      isLightMode: true // Nuevo estado para el tema
+      isLightMode: true, // Nuevo estado para el tema
+      currentTrackIndex: 0 // Nuevo estado para el swipe
     }
   },
   computed: {
@@ -239,6 +245,21 @@ export default {
       if(document.hidden && this.isPlaying) {
         this.toggle();
       }
+    });
+
+    // Mejoras para móviles
+    this.setupMobileFeatures();
+    
+    // Escuchar cambios de orientación
+    window.addEventListener('orientationchange', () => {
+      setTimeout(() => {
+        this.handleOrientationChange();
+      }, 100);
+    });
+    
+    // Escuchar cambios de tamaño de ventana
+    window.addEventListener('resize', () => {
+      this.handleResize();
     });
   },
   methods: {
@@ -595,6 +616,142 @@ export default {
     applyTheme() {
       document.documentElement.classList.toggle('theme-light', this.isLightMode);
       document.documentElement.classList.toggle('theme-dark', !this.isLightMode);
+    },
+    setupMobileFeatures() {
+      // Detectar si es móvil
+      const isMobile = window.innerWidth <= 640;
+      
+      if (isMobile) {
+        // Añadir clase para móviles
+        document.body.classList.add('mobile-device');
+        
+        // Mejorar la experiencia táctil
+        this.setupTouchInteractions();
+        
+        // Optimizar el scroll
+        this.setupSmoothScroll();
+        
+        // Mejorar la accesibilidad
+        this.setupMobileAccessibility();
+      }
+    },
+    
+    setupTouchInteractions() {
+      // Mejorar feedback táctil para celdas
+      const cells = document.querySelectorAll('.cell');
+      cells.forEach(cell => {
+        cell.addEventListener('touchstart', (e) => {
+          cell.style.transform = 'scale(0.95)';
+        });
+        
+        cell.addEventListener('touchend', (e) => {
+          cell.style.transform = 'scale(1)';
+        });
+      });
+      
+      // Mejorar feedback táctil para botones
+      const buttons = document.querySelectorAll('button, .btn');
+      buttons.forEach(button => {
+        button.addEventListener('touchstart', (e) => {
+          button.style.transform = 'scale(0.98)';
+        });
+        
+        button.addEventListener('touchend', (e) => {
+          button.style.transform = 'scale(1)';
+        });
+      });
+    },
+    
+    setupSmoothScroll() {
+      // Scroll suave para el grid
+      const grid = document.querySelector('.grid');
+      if (grid) {
+        grid.style.scrollBehavior = 'smooth';
+        grid.style.webkitOverflowScrolling = 'touch';
+      }
+    },
+    
+    setupMobileAccessibility() {
+      // Mejorar navegación por teclado en móviles
+      const focusableElements = document.querySelectorAll('button, input, .cell, .track-type');
+      focusableElements.forEach(element => {
+        element.setAttribute('tabindex', '0');
+      });
+      
+      // Añadir soporte para gestos de swipe (opcional)
+      this.setupSwipeGestures();
+    },
+    
+    setupSwipeGestures() {
+      // Implementar gestos de swipe para navegar entre pistas
+      let startX = 0;
+      let startY = 0;
+      
+      document.addEventListener('touchstart', (e) => {
+        startX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
+      });
+      
+      document.addEventListener('touchend', (e) => {
+        const endX = e.changedTouches[0].clientX;
+        const endY = e.changedTouches[0].clientY;
+        const diffX = startX - endX;
+        const diffY = startY - endY;
+        
+        // Detectar swipe horizontal
+        if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 50) {
+          if (diffX > 0) {
+            // Swipe izquierda - siguiente pista
+            this.nextTrack();
+          } else {
+            // Swipe derecha - pista anterior
+            this.previousTrack();
+          }
+        }
+      });
+    },
+    
+    nextTrack() {
+      // Navegar a la siguiente pista
+      const currentTrack = this.currentTrackIndex || 0;
+      if (currentTrack < this.tracks.length - 1) {
+        this.currentTrackIndex = currentTrack + 1;
+        this.scrollToTrack(this.currentTrackIndex);
+      }
+    },
+    
+    previousTrack() {
+      // Navegar a la pista anterior
+      const currentTrack = this.currentTrackIndex || 0;
+      if (currentTrack > 0) {
+        this.currentTrackIndex = currentTrack - 1;
+        this.scrollToTrack(this.currentTrackIndex);
+      }
+    },
+    
+    scrollToTrack(trackIndex) {
+      // Scroll suave a la pista especificada
+      const trackElement = document.querySelector(`[data-track-index="${trackIndex}"]`);
+      if (trackElement) {
+        trackElement.scrollIntoView({
+          behavior: 'smooth',
+          block: 'nearest'
+        });
+      }
+    },
+
+    handleOrientationChange() {
+      // Reiniciar la reproducción si la orientación cambia
+      if (this.isPlaying) {
+        this.toggle();
+      }
+    },
+
+    handleResize() {
+      // Reiniciar la reproducción si el tamaño de la ventana cambia
+      if (this.isPlaying) {
+        this.toggle();
+      }
     }
   }
 }
