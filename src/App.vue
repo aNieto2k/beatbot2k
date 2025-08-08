@@ -3,6 +3,10 @@
     <div class="card">
       <header>
         <h1>🥁 BeatBot2k</h1>
+        <div v-if="isPlayingSession" class="session-playback-header">
+          <span class="session-playback-header-dot"></span>
+          <span>Reproduciendo sesión</span>
+        </div>
         <div class="controls">
           <button class="primary" @click="toggle()">{{ isPlaying ? 'Pausar' : 'Reproducir' }}</button>
           <button @click="randomize()">Aleatorizar</button>
@@ -38,7 +42,8 @@
                     class="cell" 
                     :class="{ 
                       active: step, 
-                      now: currentStep === stepIndex 
+                      now: currentStep === stepIndex,
+                      'session-playing': isPlayingSession && step
                     }"
                     @click="toggleStep(trackIndex, stepIndex)"
                     :title="`${step ? 'Desactivar' : 'Activar'} paso ${stepIndex + 1} de ${track.name}`"
@@ -99,6 +104,25 @@
           <div class="recording-indicator">
             <span class="recording-dot"></span>
             <span>Grabando... {{ getCurrentSessionTime() }}</span>
+          </div>
+        </div>
+        
+        <div v-if="isPlayingSession" class="session-playback-status">
+          <div class="session-playback-indicator">
+            <span class="session-playback-dot"></span>
+            <span>Reproduciendo sesión: {{ currentSession?.sessionId || 'Sesión' }}</span>
+            <span class="session-playback-time">{{ getSessionPlaybackTime() }}</span>
+          </div>
+          <div class="session-playback-progress">
+            <div class="progress-bar">
+              <div 
+                class="progress-fill" 
+                :style="{ width: getSessionPlaybackProgress() + '%' }"
+              ></div>
+            </div>
+            <button @click="stopSessionPlayback()" class="stop-session-btn">
+              ⏹️ Detener Reproducción
+            </button>
           </div>
         </div>
         
@@ -353,6 +377,13 @@ export default {
       
       // Sessions management
       savedSessions: [],
+      showSessionsModal: false,
+      
+      // Session playback state
+      isPlayingSession: false,
+      currentSession: null,
+      sessionPlaybackStartTime: 0,
+      sessionPlaybackProgress: 0,
       
       // Available track types
       availableTrackTypes: [
@@ -441,6 +472,9 @@ export default {
 
     // Cargar sesiones guardadas al montar
     this.loadSavedSessions();
+    
+    // Iniciar timer para actualizar progreso de sesión
+    this.startSessionProgressTimer();
   },
   methods: {
     // Original methods that were overridden
@@ -994,9 +1028,15 @@ export default {
       }
     },
     
-    // Session playback methods
+    // Session playback methods with feedback
     playSession(sessionData) {
       if (!sessionData || !sessionData.events) return;
+      
+      // Set session playback state
+      this.isPlayingSession = true;
+      this.currentSession = sessionData;
+      this.sessionPlaybackStartTime = Date.now();
+      this.sessionPlaybackProgress = 0;
       
       // Reset to initial state
       const initialEvent = sessionData.events.find(e => e.type === 'session_start');
@@ -1013,8 +1053,51 @@ export default {
       sessionData.events.forEach(event => {
         setTimeout(() => {
           this.replayEvent(event);
+          this.updateSessionPlaybackProgress(event.timestamp);
         }, event.timestamp);
       });
+      
+      // Set timeout to end session playback
+      const totalDuration = sessionData.duration || 0;
+      setTimeout(() => {
+        this.stopSessionPlayback();
+      }, totalDuration);
+      
+      console.log('▶️ Playing session:', sessionData.sessionId);
+    },
+    
+    stopSessionPlayback() {
+      this.isPlayingSession = false;
+      this.currentSession = null;
+      this.sessionPlaybackStartTime = 0;
+      this.sessionPlaybackProgress = 0;
+      console.log('⏹️ Session playback stopped');
+    },
+    
+    updateSessionPlaybackProgress(timestamp) {
+      if (this.currentSession) {
+        this.sessionPlaybackProgress = timestamp;
+      }
+    },
+    
+    getSessionPlaybackTime() {
+      if (!this.isPlayingSession || !this.sessionPlaybackStartTime) return '0:00';
+      const currentTime = Date.now() - this.sessionPlaybackStartTime;
+      return this.formatTime(currentTime);
+    },
+    
+    getSessionPlaybackProgress() {
+      if (!this.currentSession || !this.currentSession.duration) return 0;
+      return (this.sessionPlaybackProgress / this.currentSession.duration) * 100;
+    },
+    
+    // Override existing playSavedSession method
+    playSavedSession(sessionId) {
+      const session = this.savedSessions.find(s => s.id === sessionId);
+      if (session) {
+        this.playSession(session.data);
+        console.log('▶️ Playing saved session:', session.name);
+      }
     },
     
     replayEvent(event) {
@@ -1357,14 +1440,6 @@ export default {
       }
     },
     
-    playSavedSession(sessionId) {
-      const session = this.savedSessions.find(s => s.id === sessionId);
-      if (session) {
-        this.playSession(session.data);
-        console.log('▶️ Playing saved session:', session.name);
-      }
-    },
-    
     exportSavedSession(sessionId) {
       const session = this.savedSessions.find(s => s.id === sessionId);
       if (session) {
@@ -1435,6 +1510,15 @@ export default {
       this.recordingSessionName = '';
       this.recordingSessionData = null;
     }
-  }
+  },
+  startSessionProgressTimer() {
+      // Actualizar progreso de sesión cada 100ms
+      setInterval(() => {
+        if (this.isPlayingSession && this.sessionPlaybackStartTime) {
+          const currentTime = Date.now() - this.sessionPlaybackStartTime;
+          this.sessionPlaybackProgress = Math.min(currentTime, this.currentSession?.duration || 0);
+        }
+      }, 100);
+    }
 }
 </script>
