@@ -8,6 +8,8 @@
           <button @click="randomize()">Aleatorizar</button>
           <button @click="clearAll()">Limpiar</button>
           <button @click="showAddTrackModal = true" class="add-track-btn">+ Pista</button>
+          <button @click="showExportModal = true" class="export-btn">📤 Exportar</button>
+          <button @click="showImportModal = true" class="import-btn">📥 Importar</button>
           <div class="toggle" @click="metronomeOn = !metronomeOn">
             <span class="led" :class="{on: metronomeOn}"></span>
             <span> Metrónomo </span>
@@ -90,6 +92,61 @@
         <button @click="showAddTrackModal = false" class="modal-close">Cancelar</button>
       </div>
     </div>
+
+    <!-- Modal para exportar patrones -->
+    <div v-if="showExportModal" class="modal-overlay" @click="showExportModal = false">
+      <div class="modal" @click.stop>
+        <h3>📤 Exportar Patrón</h3>
+        <div class="export-section">
+          <p class="export-description">Comparte tu ritmo con amigos usando este código:</p>
+          <div class="seed-container">
+            <input 
+              :value="currentSeed" 
+              readonly 
+              class="seed-input" 
+              ref="seedInput"
+              @click="copySeed"
+            />
+            <button @click="copySeed" class="copy-btn">
+              {{ showCopySuccess ? '✅ Copiado!' : '📋 Copiar' }}
+            </button>
+          </div>
+          <div class="seed-info">
+            <p><strong>Seed:</strong> {{ currentSeed.substring(0, 20) }}...</p>
+            <p><strong>Pistas:</strong> {{ tracks.length }}</p>
+            <p><strong>Tempo:</strong> {{ bpm }} BPM</p>
+            <p><strong>Swing:</strong> {{ Math.round(swing * 100) }}%</p>
+          </div>
+        </div>
+        <button @click="showExportModal = false" class="modal-close">Cerrar</button>
+      </div>
+    </div>
+
+    <!-- Modal para importar patrones -->
+    <div v-if="showImportModal" class="modal-overlay" @click="showImportModal = false">
+      <div class="modal" @click.stop>
+        <h3>📥 Importar Patrón</h3>
+        <div class="import-section">
+          <p class="import-description">Pega el código del patrón que quieres importar:</p>
+          <div class="seed-container">
+            <input 
+              v-model="importSeed" 
+              placeholder="Pega aquí el código del patrón..." 
+              class="seed-input"
+              @keyup.enter="importPattern"
+            />
+            <button @click="importPattern" class="import-pattern-btn">🎵 Importar</button>
+          </div>
+          <div v-if="importError" class="import-error">
+            {{ importError }}
+          </div>
+          <div v-if="showImportSuccess" class="import-success">
+            ✅ Patrón importado exitosamente!
+          </div>
+        </div>
+        <button @click="showImportModal = false" class="modal-close">Cancelar</button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -119,6 +176,10 @@ export default {
         { name: 'Hat',   type: 'hat', steps: Array(16).fill(false) }
       ],
       showAddTrackModal: false,
+      showExportModal: false,
+      showImportModal: false,
+      importSeed: '',
+      importError: '',
       availableTrackTypes: [
         { id: 'kick', name: 'Kick', description: 'Bajo sintético', icon: '🥁' },
         { id: 'snare', name: 'Snare', description: 'Caja sintética', icon: '🥁' },
@@ -128,7 +189,29 @@ export default {
         { id: 'cymbal', name: 'Cymbal', description: 'Plato sintético', icon: '🥁' },
         { id: 'bass', name: 'Bass', description: 'Bajo sintético', icon: '🎸' },
         { id: 'lead', name: 'Lead', description: 'Lead sintético', icon: '🎹' }
-      ]
+      ],
+      showCopySuccess: false,
+      showImportSuccess: false
+    }
+  },
+  computed: {
+    currentSeed() {
+      // Crear un seed más robusto que incluya toda la información del patrón
+      const patternData = {
+        version: '1.0',
+        bpm: this.bpm,
+        swing: this.swing,
+        density: this.density,
+        tracks: this.tracks.map(track => ({
+          name: track.name,
+          type: track.type,
+          steps: track.steps
+        }))
+      };
+      
+      // Convertir a string y codificar en base64
+      const jsonString = JSON.stringify(patternData);
+      return btoa(jsonString);
     }
   },
   mounted() {
@@ -403,6 +486,91 @@ export default {
     removeTrack(index) {
       if (this.tracks.length > 1) {
         this.tracks.splice(index, 1);
+      }
+    },
+    copySeed() {
+      const seedInput = this.$refs.seedInput;
+      if (seedInput) {
+        seedInput.select();
+        seedInput.setSelectionRange(0, 99999); // Para móviles
+        
+        try {
+          // Usar la API moderna del navegador
+          if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(this.currentSeed).then(() => {
+              this.showCopySuccess = true;
+              setTimeout(() => {
+                this.showCopySuccess = false;
+              }, 2000);
+            });
+          } else {
+            // Fallback para navegadores antiguos
+            document.execCommand('copy');
+            this.showCopySuccess = true;
+            setTimeout(() => {
+              this.showCopySuccess = false;
+            }, 2000);
+          }
+        } catch (err) {
+          console.error('Error al copiar:', err);
+        }
+      }
+    },
+    importPattern() {
+      if (!this.importSeed.trim()) {
+        this.importError = 'Por favor, introduce un código de semilla válido.';
+        return;
+      }
+
+      try {
+        // Validar que sea un string base64 válido
+        const jsonString = atob(this.importSeed.trim());
+        const patternData = JSON.parse(jsonString);
+
+        // Validar estructura del patrón
+        if (!patternData.version || patternData.version !== '1.0') {
+          this.importError = 'Formato de semilla inválido. Versión no soportada.';
+          return;
+        }
+
+        if (!patternData.tracks || !Array.isArray(patternData.tracks)) {
+          this.importError = 'Formato de semilla inválido. Datos de pistas faltantes.';
+          return;
+        }
+
+        // Validar y aplicar los datos
+        if (patternData.bpm && patternData.bpm >= 60 && patternData.bpm <= 200) {
+          this.bpm = patternData.bpm;
+        }
+        
+        if (patternData.swing !== undefined && patternData.swing >= 0 && patternData.swing <= 0.6) {
+          this.swing = patternData.swing;
+        }
+        
+        if (patternData.density !== undefined && patternData.density >= 0 && patternData.density <= 1) {
+          this.density = patternData.density;
+        }
+
+        // Aplicar las pistas
+        this.tracks = patternData.tracks.map(track => ({
+          name: track.name || 'Pista',
+          type: track.type || 'kick',
+          steps: Array.isArray(track.steps) ? track.steps : Array(16).fill(false)
+        }));
+
+        this.showImportModal = false;
+        this.importError = '';
+        this.importSeed = '';
+        
+        // Mostrar mensaje de éxito
+        this.showImportSuccess = true;
+        setTimeout(() => {
+          this.showImportSuccess = false;
+        }, 3000);
+        
+      } catch (error) {
+        console.error('Error al importar:', error);
+        this.importError = 'Error al importar el patrón. Verifica que el código sea válido.';
       }
     }
   }
