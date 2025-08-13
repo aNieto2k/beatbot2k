@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="384" height="384" viewBox="0 0 384 384" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4a90e2;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#357abd;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="drum" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#f0f0f0;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Fondo circular -->
+  <circle cx="192" cy="192" r="172.8" fill="url(#bg)" stroke="#2d2d2d" stroke-width="7.68"/>
+  
+  <!-- Tambor principal -->
+  <circle cx="192" cy="192" r="115.19999999999999" fill="url(#drum)" stroke="#2d2d2d" stroke-width="3.84"/>
+  
+  <!-- Detalles del tambor -->
+  <circle cx="192" cy="192" r="92.16" fill="none" stroke="#4a90e2" stroke-width="3.072"/>
+  <circle cx="192" cy="192" r="69.11999999999999" fill="none" stroke="#4a90e2" stroke-width="1.92"/>
+  
+  <!-- Baquetas -->
+  <line x1="122.88000000000001" y1="122.88000000000001" x2="157.44" y2="157.44" stroke="#8B4513" stroke-width="15.36" stroke-linecap="round"/>
+  <line x1="261.12" y1="122.88000000000001" x2="226.56" y2="157.44" stroke="#8B4513" stroke-width="15.36" stroke-linecap="round"/>
+  
+  <!-- Notas musicales -->
+  <g fill="#4a90e2">
+    <circle cx="88.32000000000001" cy="88.32000000000001" r="7.68"/>
+    <rect x="86.32000000000001" y="96" width="15.36" height="15.36"/>
+    <circle cx="295.68" cy="88.32000000000001" r="7.68"/>
+    <rect x="293.68" y="96" width="15.36" height="15.36"/>
+  </g>
+  
+  <!-- Ondas de sonido -->
+  <g fill="none" stroke="#4a90e2" stroke-width="1.92" opacity="0.6">
+    <path d="M 61.44 192 Q 88.32000000000001 161.28 119.03999999999999 192 Q 149.76 222.72 180.48 192"/>
+    <path d="M 203.52 192 Q 234.24 161.28 264.96 192 Q 295.68 222.72 322.56 192"/>
+  </g>
+</svg>

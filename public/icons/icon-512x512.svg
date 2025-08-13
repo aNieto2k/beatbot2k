@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4a90e2;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#357abd;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="drum" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#f0f0f0;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Fondo circular -->
+  <circle cx="256" cy="256" r="230.4" fill="url(#bg)" stroke="#2d2d2d" stroke-width="10.24"/>
+  
+  <!-- Tambor principal -->
+  <circle cx="256" cy="256" r="153.6" fill="url(#drum)" stroke="#2d2d2d" stroke-width="5.12"/>
+  
+  <!-- Detalles del tambor -->
+  <circle cx="256" cy="256" r="122.88" fill="none" stroke="#4a90e2" stroke-width="4.096"/>
+  <circle cx="256" cy="256" r="92.16" fill="none" stroke="#4a90e2" stroke-width="2.56"/>
+  
+  <!-- Baquetas -->
+  <line x1="163.84" y1="163.84" x2="209.92000000000002" y2="209.92000000000002" stroke="#8B4513" stroke-width="20.48" stroke-linecap="round"/>
+  <line x1="348.15999999999997" y1="163.84" x2="302.08" y2="209.92000000000002" stroke="#8B4513" stroke-width="20.48" stroke-linecap="round"/>
+  
+  <!-- Notas musicales -->
+  <g fill="#4a90e2">
+    <circle cx="117.76" cy="117.76" r="10.24"/>
+    <rect x="115.76" y="128" width="20.48" height="20.48"/>
+    <circle cx="394.24" cy="117.76" r="10.24"/>
+    <rect x="392.24" y="128" width="20.48" height="20.48"/>
+  </g>
+  
+  <!-- Ondas de sonido -->
+  <g fill="none" stroke="#4a90e2" stroke-width="2.56" opacity="0.6">
+    <path d="M 81.92 256 Q 117.76 215.04 158.72 256 Q 199.68 296.96 240.64 256"/>
+    <path d="M 271.36 256 Q 312.32 215.04 353.28 256 Q 394.24 296.96 430.08 256"/>
+  </g>
+</svg>

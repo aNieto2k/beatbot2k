@@ -496,11 +496,19 @@
         </div>
       </div>
     </div>
+    
+    <!-- Componentes PWA -->
+    <OfflineIndicator />
+    <PWAInstallPrompt />
+    <PWAUpdatePrompt />
   </div>
 </template>
 
 <script>
 import { reactive } from 'vue'
+import OfflineIndicator from './components/OfflineIndicator.vue'
+import PWAInstallPrompt from './components/PWAInstallPrompt.vue'
+import PWAUpdatePrompt from './components/PWAUpdatePrompt.vue'
 
 export default {
   name: 'App',
@@ -688,6 +696,11 @@ export default {
 
     // Check for shared session URL
     this.checkForSharedSession();
+  },
+  components: {
+    OfflineIndicator,
+    PWAInstallPrompt,
+    PWAUpdatePrompt
   },
   methods: {
     // Original methods that were overridden
